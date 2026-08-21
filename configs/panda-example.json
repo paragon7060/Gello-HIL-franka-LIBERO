@@ -1,0 +1,10 @@
+{
+  "port": "/dev/serial/by-id/usb-FTDI_REPLACE_ME-if00-port0",
+  "baudrate": 57600,
+  "arm_ids": [1, 2, 3, 4, 5, 6, 7],
+  "gripper_id": 8,
+  "joint_signs": [1, 1, 1, -1, 1, -1, 1],
+  "reference_pose_radians": [0, 0, 0, -1.5707963268, 0, 1.5707963268, 0],
+  "mapping_mode": "absolute",
+  "max_active_steps": 1000
+}

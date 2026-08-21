@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gello-hil-franka-libero"
+version = "0.1.0"
+description = "GELLO human-in-the-loop joint teleoperation for Franka Panda in LIBERO"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "Gello-HIL-franka-LIBERO contributors"}]
+dependencies = [
+  "numpy>=1.23,<2",
+  "opencv-python>=4.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.5"]
+
+[project.scripts]
+gello-hil = "gello_hil.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
