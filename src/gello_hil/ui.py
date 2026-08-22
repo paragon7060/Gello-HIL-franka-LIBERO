@@ -45,7 +45,9 @@ def operator_panel(
         lines += [(line, (0, 120, 255), 0.54) for line in textwrap.wrap(notice, 48)[:2]]
     y = 36
     for text, line_color, size in lines:
-        cv2.putText(panel, text, (18, y), cv2.FONT_HERSHEY_SIMPLEX, size, line_color, 2, cv2.LINE_AA)
+        cv2.putText(
+            panel, text, (18, y), cv2.FONT_HERSHEY_SIMPLEX, size, line_color, 2, cv2.LINE_AA
+        )
         y += 32 if size < 0.7 else 40
     return np.concatenate((frame, panel), axis=1)
 

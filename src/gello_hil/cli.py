@@ -12,7 +12,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .calibration import GelloCalibration, PANDA_REFERENCE_POSE, infer_quarter_turn_offsets
+from .calibration import PANDA_REFERENCE_POSE, GelloCalibration, infer_quarter_turn_offsets
 from .control import AbsoluteJointFollower, RelativeClutchFollower, TargetDiscontinuity
 from .dynamixel import ReadOnlyDynamixelBus
 from .session import OperatorSession, decode_key
@@ -102,8 +102,11 @@ def mapping_check(args) -> int:
     env = None
     try:
         env, _, _ = make_env(
-            args.suite, args.task_id, args.state_index,
-            resolution=args.resolution, seed=args.seed,
+            args.suite,
+            args.task_id,
+            args.state_index,
+            resolution=args.resolution,
+            seed=args.seed,
         )
         with _bus(args) as bus:
             while True:
@@ -159,7 +162,10 @@ def _save_attempt(output, *, metadata, actions, counts, joints, frames) -> None:
     if frames:
         height, width = frames[0].shape[:2]
         writer = cv2.VideoWriter(
-            str(output / "operator-view.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), 20.0, (width, height)
+            str(output / "operator-view.mp4"),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            20.0,
+            (width, height),
         )
         for frame in frames:
             writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
@@ -171,7 +177,9 @@ def collect(args) -> int:
     from .libero_runtime import follower_joints, make_env, rgb_frame
 
     calibration = GelloCalibration.from_json(Path(args.calibration))
-    controller_class = AbsoluteJointFollower if args.mapping == "absolute" else RelativeClutchFollower
+    controller_class = (
+        AbsoluteJointFollower if args.mapping == "absolute" else RelativeClutchFollower
+    )
     controller = controller_class(calibration)
     session = OperatorSession()
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
@@ -185,8 +193,11 @@ def collect(args) -> int:
     ids = calibration.arm_ids + (calibration.gripper_id,)
     try:
         env, obs, instruction = make_env(
-            args.suite, args.task_id, args.state_index,
-            resolution=args.resolution, seed=args.seed,
+            args.suite,
+            args.task_id,
+            args.state_index,
+            resolution=args.resolution,
+            seed=args.seed,
         )
         with _bus(args) as bus:
             latest = None
@@ -196,7 +207,9 @@ def collect(args) -> int:
                 target = calibration.mapped_joints(counts)
                 errors = target - current
                 frame = rgb_frame(obs)
-                notice = "Ready screen: simulator is frozen; Enter starts." if not session.active else ""
+                notice = (
+                    "Ready screen: simulator is frozen; Enter starts." if not session.active else ""
+                )
                 canvas = operator_panel(
                     frame,
                     instruction=instruction,
@@ -248,7 +261,7 @@ def collect(args) -> int:
                     session.finish("success")
                 elif session.active_step_count >= args.max_active_steps:
                     session.finish("active_horizon_exhausted")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - every failed hardware attempt must be saved
         error = f"{type(exc).__name__}: {exc}"
         if not session.terminal:
             session.finish("runtime_error")
@@ -275,11 +288,17 @@ def collect(args) -> int:
             },
         }
         _save_attempt(
-            output, metadata=metadata, actions=actions, counts=counts_log,
-            joints=joints_log, frames=frames,
+            output,
+            metadata=metadata,
+            actions=actions,
+            counts=counts_log,
+            joints=joints_log,
+            frames=frames,
         )
         print(f"Saved attempt: {output.resolve()}")
-        print(f"success={success} aborted={session.aborted} active_steps={session.active_step_count}")
+        print(
+            f"success={success} aborted={session.aborted} active_steps={session.active_step_count}"
+        )
         if error:
             print(error)
     return 0 if success else 1

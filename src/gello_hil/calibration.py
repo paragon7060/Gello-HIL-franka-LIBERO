@@ -94,8 +94,14 @@ class GelloCalibration:
     gripper_closed_count: int
 
     def validate(self) -> None:
-        if {len(self.arm_ids), len(self.calibration_counts), len(self.reference_pose),
-            len(self.assembly_offsets_radians), len(self.joint_signs), len(self.joint_limits)} != {7}:
+        if {
+            len(self.arm_ids),
+            len(self.calibration_counts),
+            len(self.reference_pose),
+            len(self.assembly_offsets_radians),
+            len(self.joint_signs),
+            len(self.joint_limits),
+        } != {7}:
             raise ValueError("calibration must describe exactly seven Panda arm joints")
         if len(set(self.arm_ids + (self.gripper_id,))) != 8:
             raise ValueError("all motor IDs must be unique")
@@ -124,7 +130,7 @@ class GelloCalibration:
         gripper_closed_count,
         reference_pose=PANDA_REFERENCE_POSE,
         joint_limits=PANDA_JOINT_LIMITS,
-    ) -> "GelloCalibration":
+    ) -> GelloCalibration:
         inferred = infer_quarter_turn_offsets(
             calibration_counts, reference_pose, joint_signs, joint_limits
         )
@@ -147,7 +153,7 @@ class GelloCalibration:
             raw = np.asarray([counts[motor_id] for motor_id in self.arm_ids])
         else:
             raw = np.asarray(counts)
-        joints = (counts_to_radians(raw) - np.asarray(self.assembly_offsets_radians))
+        joints = counts_to_radians(raw) - np.asarray(self.assembly_offsets_radians)
         joints *= np.asarray(self.joint_signs)
         return normalize_joint_positions(joints, self.joint_limits)
 
@@ -162,7 +168,7 @@ class GelloCalibration:
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
     @classmethod
-    def from_json(cls, path: Path) -> "GelloCalibration":
+    def from_json(cls, path: Path) -> GelloCalibration:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if payload.pop("schema_version", None) != SCHEMA_VERSION:
             raise ValueError("unsupported calibration schema")

@@ -1,8 +1,8 @@
 import numpy as np
 
 from gello_hil.calibration import (
-    GelloCalibration,
     PANDA_REFERENCE_POSE,
+    GelloCalibration,
     normalize_joint_positions,
 )
 

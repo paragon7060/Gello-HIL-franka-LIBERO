@@ -95,7 +95,9 @@ class RelativeClutchFollower(_FollowerBase):
         current = np.asarray(follower_joints, dtype=np.float64)
         arm_counts = np.asarray([counts[i] for i in self.calibration.arm_ids])
         delta = modular_count_delta(arm_counts, self._previous_counts)
-        delta_rad = np.asarray(self.calibration.joint_signs) * delta * 2.0 * np.pi / COUNTS_PER_REVOLUTION
+        delta_rad = (
+            np.asarray(self.calibration.joint_signs) * delta * 2.0 * np.pi / COUNTS_PER_REVOLUTION
+        )
         raw_target = self._follower_anchor + delta_rad
         action, diagnostic = self._finish(counts, current, raw_target)
         diagnostic["motion_from_anchor_radians"] = delta_rad.tolist()
@@ -114,7 +116,10 @@ class AbsoluteJointFollower(_FollowerBase):
         arm_counts = np.asarray([counts[i] for i in self.calibration.arm_ids])
         raw_target = self.calibration.mapped_joints(arm_counts)
         delta = modular_count_delta(arm_counts, self._previous_counts)
-        expected = self._previous_raw_target + np.asarray(self.calibration.joint_signs) * delta * 2.0 * np.pi / COUNTS_PER_REVOLUTION
+        expected = (
+            self._previous_raw_target
+            + np.asarray(self.calibration.joint_signs) * delta * 2.0 * np.pi / COUNTS_PER_REVOLUTION
+        )
         residual = raw_target - expected
         diagnostic = {
             "target_continuity_error_radians": residual.tolist(),

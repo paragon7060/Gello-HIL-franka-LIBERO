@@ -12,6 +12,7 @@ import select
 import termios
 import time
 from pathlib import Path
+from typing import ClassVar
 
 PROTOCOL2_HEADER = bytes((0xFF, 0xFF, 0xFD, 0x00))
 PING = 0x01
@@ -49,7 +50,10 @@ def protocol2_packet(motor_id: int, instruction: int, parameters: bytes = b"") -
 class ReadOnlyDynamixelBus:
     """Exclusive serial reader for GELLO Present Position telemetry."""
 
-    _baud_constants = {57600: termios.B57600, 115200: termios.B115200}
+    _baud_constants: ClassVar[dict[int, int]] = {
+        57600: termios.B57600,
+        115200: termios.B115200,
+    }
 
     def __init__(self, port: str, *, baudrate: int = 57600, timeout_seconds: float = 0.12):
         if baudrate not in self._baud_constants:
@@ -87,7 +91,7 @@ class ReadOnlyDynamixelBus:
                 os.close(self.fd)
                 self.fd = -1
 
-    def __enter__(self) -> "ReadOnlyDynamixelBus":
+    def __enter__(self):
         return self
 
     def __exit__(self, *_exc) -> None:
@@ -114,9 +118,9 @@ class ReadOnlyDynamixelBus:
                 continue
             packet = bytes(buffer[:total_length])
             if protocol2_crc(packet[:-2]) != int.from_bytes(packet[-2:], "little"):
-                raise IOError("Dynamixel status CRC mismatch")
+                raise OSError("Dynamixel status CRC mismatch")
             if packet[4] != expected_id or packet[7] != STATUS:
-                raise IOError("unexpected Dynamixel status packet")
+                raise OSError("unexpected Dynamixel status packet")
             return int(packet[8]), packet[9:-2]
         raise TimeoutError(f"Dynamixel ID {expected_id} did not answer")
 
@@ -126,14 +130,14 @@ class ReadOnlyDynamixelBus:
         termios.tcflush(self.fd, termios.TCIFLUSH)
         packet = protocol2_packet(motor_id, instruction, parameters)
         if os.write(self.fd, packet) != len(packet):
-            raise IOError("short Dynamixel serial write")
+            raise OSError("short Dynamixel serial write")
         termios.tcdrain(self.fd)
         return self._read_status(motor_id)
 
     def ping(self, motor_id: int) -> dict:
         error, parameters = self._transaction(int(motor_id), PING)
         if len(parameters) != 3:
-            raise IOError("malformed PING response")
+            raise OSError("malformed PING response")
         return {
             "id": int(motor_id),
             "error": int(error),
@@ -145,7 +149,7 @@ class ReadOnlyDynamixelBus:
         params = int(address).to_bytes(2, "little") + int(length).to_bytes(2, "little")
         error, values = self._transaction(int(motor_id), READ, params)
         if len(values) != length:
-            raise IOError(f"Dynamixel ID {motor_id} returned {len(values)} of {length} bytes")
+            raise OSError(f"Dynamixel ID {motor_id} returned {len(values)} of {length} bytes")
         return error, values
 
     def _read_many_status(self, expected_ids: tuple[int, ...], length: int) -> dict[int, bytes]:
@@ -173,15 +177,15 @@ class ReadOnlyDynamixelBus:
                 packet = bytes(buffer[:total])
                 del buffer[:total]
                 if protocol2_crc(packet[:-2]) != int.from_bytes(packet[-2:], "little"):
-                    raise IOError("Dynamixel SYNC_READ status CRC mismatch")
+                    raise OSError("Dynamixel SYNC_READ status CRC mismatch")
                 motor_id = int(packet[4])
                 if motor_id not in expected or packet[7] != STATUS:
-                    raise IOError("unexpected SYNC_READ status packet")
+                    raise OSError("unexpected SYNC_READ status packet")
                 if packet[8]:
-                    raise IOError(f"Dynamixel ID {motor_id} hardware error 0x{packet[8]:02x}")
+                    raise OSError(f"Dynamixel ID {motor_id} hardware error 0x{packet[8]:02x}")
                 values = packet[9:-2]
                 if len(values) != length:
-                    raise IOError("malformed SYNC_READ response")
+                    raise OSError("malformed SYNC_READ response")
                 responses[motor_id] = values
         missing = sorted(expected - set(responses))
         if missing:
@@ -195,13 +199,15 @@ class ReadOnlyDynamixelBus:
         if len(ids) == 1:
             error, values = self.read(ids[0], PRESENT_POSITION_ADDRESS, 4)
             if error:
-                raise IOError(f"Dynamixel ID {ids[0]} hardware error 0x{error:02x}")
+                raise OSError(f"Dynamixel ID {ids[0]} hardware error 0x{error:02x}")
             return {ids[0]: int.from_bytes(values, "little") % COUNTS_PER_REVOLUTION}
-        params = PRESENT_POSITION_ADDRESS.to_bytes(2, "little") + (4).to_bytes(2, "little") + bytes(ids)
+        params = (
+            PRESENT_POSITION_ADDRESS.to_bytes(2, "little") + (4).to_bytes(2, "little") + bytes(ids)
+        )
         termios.tcflush(self.fd, termios.TCIFLUSH)
         packet = protocol2_packet(BROADCAST_ID, SYNC_READ, params)
         if os.write(self.fd, packet) != len(packet):
-            raise IOError("short Dynamixel SYNC_READ serial write")
+            raise OSError("short Dynamixel SYNC_READ serial write")
         termios.tcdrain(self.fd)
         responses = self._read_many_status(ids, 4)
         return {
