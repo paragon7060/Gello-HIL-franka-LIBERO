@@ -47,7 +47,7 @@ Follow the official installation instructions for
 package in that same environment:
 
 ```bash
-git clone https://github.com/minje227-coder/Gello-HIL-franka-LIBERO.git
+git clone https://github.com/paragon7060/Gello-HIL-franka-LIBERO.git
 cd Gello-HIL-franka-LIBERO
 python -m pip install -e .
 ```
