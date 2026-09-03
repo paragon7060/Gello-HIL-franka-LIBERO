@@ -20,6 +20,7 @@ def operator_panel(
     errors=None,
     notice: str = "",
     scale: float = 2.0,
+    controls: tuple[str, str] | None = None,
 ) -> np.ndarray:
     frame = cv2.cvtColor(np.asarray(rgb_frame, dtype=np.uint8), cv2.COLOR_RGB2BGR)
     frame = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
@@ -31,8 +32,8 @@ def operator_panel(
         (f"STATUS: {status}", color, 0.86),
         (f"ACTIVE STEPS: {active_steps}/{max_steps}", (255, 255, 255), 0.62),
         (f"MAPPING: {mapping_mode}", (255, 255, 255), 0.58),
-        ("ENTER resume/re-anchor | SPACE clutch", (220, 220, 220), 0.56),
-        ("q abort (attempt is still saved)", (220, 220, 220), 0.56),
+        ((controls or ("ENTER resume/re-anchor | SPACE clutch", "q abort (attempt is still saved)"))[0], (220, 220, 220), 0.56),
+        ((controls or ("ENTER resume/re-anchor | SPACE clutch", "q abort (attempt is still saved)"))[1], (220, 220, 220), 0.56),
     ]
     if joints is not None:
         values = np.asarray(joints)

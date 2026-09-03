@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import hashlib
 import json
 import os
 import time
@@ -13,7 +15,7 @@ import cv2
 import numpy as np
 
 from .calibration import PANDA_REFERENCE_POSE, GelloCalibration, infer_quarter_turn_offsets
-from .control import AbsoluteJointFollower, RelativeClutchFollower, TargetDiscontinuity
+from .control import AbsoluteJointFollower, EnterAnchoredFollower, RelativeClutchFollower, TargetDiscontinuity
 from .dynamixel import ReadOnlyDynamixelBus
 from .session import OperatorSession, decode_key
 from .ui import close_window, operator_panel
@@ -180,6 +182,10 @@ def collect(args) -> int:
     controller_class = (
         AbsoluteJointFollower if args.mapping == "absolute" else RelativeClutchFollower
     )
+    assisted = bool(getattr(args, "assisted", False))
+    if assisted:
+        controller_class = EnterAnchoredFollower
+    calibration_sha256 = hashlib.sha256(Path(args.calibration).read_bytes()).hexdigest()
     controller = controller_class(calibration)
     session = OperatorSession()
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
@@ -189,6 +195,8 @@ def collect(args) -> int:
     success = False
     error = None
     instruction = ""
+    alignment = None
+    live_handoff = None
     window = f"GELLO HIL {args.suite} task={args.task_id} state={args.state_index}"
     ids = calibration.arm_ids + (calibration.gripper_id,)
     try:
@@ -199,9 +207,46 @@ def collect(args) -> int:
             resolution=args.resolution,
             seed=args.seed,
         )
-        with _bus(args) as bus:
+        if assisted:
+            from .assist_ui import collection_window_name
+            from .assisted import make_alignment_runner
+
+            window = collection_window_name(
+                "GELLO-HIL-ASSIST-v1", task_id=args.task_id,
+                state_id=args.state_index, attempt_index=1,
+            )
+            # Use the SAME live environment and window before and after release.
+            runner = make_alignment_runner(args, calibration)
+            alignment = runner(
+                env=env, observation=obs, follower_target_joints=follower_joints(env),
+                task_instruction=instruction, task_id=args.task_id,
+                state_id=args.state_index, attempt_index=1, resize_size=args.resolution,
+            )
+            if not alignment["collection_start_eligible"]:
+                if alignment["aborted"]:
+                    session.abort()
+                    raise _AlignmentStopped()
+                raise RuntimeError(alignment["failure"] or "alignment not eligible")
+            live_handoff = runner.live_handoff
+            if live_handoff is not None:
+                live_handoff.read_only_factory = lambda: _bus(args)
+        with (live_handoff if live_handoff is not None else _bus(args)) as bus:
             latest = None
+            if assisted and alignment.get("collection_start_requested_by_alignment_enter"):
+                anchor = controller.anchor(bus.read_positions(ids), follower_joints(env))
+                start_event = session.resume(
+                    anchor_counts=anchor["counts"], follower_joints=anchor["follower_joints"],
+                    leader_joints=anchor["leader_joints"], mode=controller.mode,
+                )
+                start_event.update(
+                    enter_target_offset_radians=anchor["enter_target_offset_radians"],
+                    start_key_source="alignment_window_enter",
+                )
+                if live_handoff is not None:
+                    live_handoff.begin()
             while not session.terminal:
+                if live_handoff is not None:
+                    live_handoff.tick(session.active_step_count)
                 counts = bus.read_positions(ids)
                 current = follower_joints(env)
                 target = calibration.mapped_joints(counts)
@@ -210,13 +255,15 @@ def collect(args) -> int:
                 notice = (
                     "Ready screen: simulator is frozen; Enter starts." if not session.active else ""
                 )
+                if live_handoff is not None and live_handoff.powered:
+                    notice = "ACTIVE: following GELLO while reducing force over 2 seconds"
                 canvas = operator_panel(
                     frame,
                     instruction=instruction,
                     status=session.status,
                     active_steps=session.active_step_count,
                     max_steps=args.max_active_steps,
-                    mapping_mode=args.mapping,
+                    mapping_mode=controller.mode,
                     joints=target,
                     errors=errors,
                     notice=notice,
@@ -228,12 +275,17 @@ def collect(args) -> int:
                     session.abort()
                     break
                 if command == "pause" and session.active:
+                    if live_handoff is not None:
+                        live_handoff.release_now("operator_clutch")
                     session.pause(
                         counts=[counts[i] for i in ids],
                         current_follower_joint_positions=current.tolist(),
                     )
                     continue
                 if command == "resume" and not session.active:
+                    if assisted:
+                        counts = bus.read_positions(ids)
+                        current = follower_joints(env)
                     anchor = controller.anchor(counts, current)
                     session.resume(
                         anchor_counts=anchor["counts"],
@@ -247,8 +299,11 @@ def collect(args) -> int:
                 try:
                     action, latest = controller.action(counts, current)
                 except TargetDiscontinuity as exc:
+                    if live_handoff is not None:
+                        live_handoff.release_now("encoder_discontinuity_clutch")
                     session.pause(**exc.diagnostic)
                     continue
+                latest["motor_assisted_transition"] = bool(live_handoff is not None and live_handoff.powered)
                 obs, reward, _done, _info = env.step(action.tolist())
                 session.record_active_step()
                 actions.append(action)
@@ -261,11 +316,24 @@ def collect(args) -> int:
                     session.finish("success")
                 elif session.active_step_count >= args.max_active_steps:
                     session.finish("active_horizon_exhausted")
+    except _AlignmentStopped:
+        pass
+    except KeyboardInterrupt:
+        if not session.terminal:
+            session.abort()
     except Exception as exc:  # noqa: BLE001 - every failed hardware attempt must be saved
         error = f"{type(exc).__name__}: {exc}"
         if not session.terminal:
             session.finish("runtime_error")
     finally:
+        if live_handoff is not None:
+            try:
+                live_handoff.close()
+            except BaseException as cleanup_exc:
+                error = f"{type(cleanup_exc).__name__}: {cleanup_exc}"
+                print("GELLO RELEASE UNVERIFIED: disconnect physical motor power")
+            if alignment is not None:
+                alignment["live_handoff"] = live_handoff.summary()
         close_window(window)
         if env is not None:
             env.close()
@@ -276,15 +344,27 @@ def collect(args) -> int:
             "task_id": args.task_id,
             "state_index": args.state_index,
             "instruction": instruction,
-            "mapping_mode": args.mapping,
+            "mapping_mode": controller.mode,
             "success": success,
             "aborted": session.aborted,
             "error": error,
             "session": session.summary(),
             "diagnostics": diagnostics,
+            "alignment": alignment,
+            "calibration": {
+                "path": str(Path(args.calibration).resolve()),
+                "sha256": calibration_sha256,
+            },
             "hardware_contract": {
-                "allowed_instructions": ["PING", "READ", "SYNC_READ"],
-                "motor_register_writes": 0,
+                "allowed_instructions": (["PING", "READ", "SYNC_READ", "WRITE"] if assisted else ["PING", "READ", "SYNC_READ"]),
+                "motor_register_writes": (
+                    sum(int(s.get("motor_register_writes", 0)) for s in (alignment or {}).get("sessions", []))
+                    + (int(live_handoff.controller.summary()["motor_register_writes"]) if live_handoff else 0)
+                ),
+                "passive_allowed_instructions": ["PING", "READ", "SYNC_READ"],
+                "passive_motor_register_writes": 0,
+                "motor_assisted_live_release": live_handoff is not None,
+                "assisted_write_provenance": "alignment.live_handoff.motor_session",
             },
         }
         _save_attempt(
@@ -301,7 +381,27 @@ def collect(args) -> int:
         )
         if error:
             print(error)
-    return 0 if success else 1
+    return 0 if success and error is None else 1
+
+
+class _AlignmentStopped(Exception):
+    """A preserved setup-only abort, not a simulator runtime error."""
+
+
+def assisted_collect(args) -> int:
+    # No bus is opened by this authorization path.
+    if not args.apply:
+        raise SystemExit("assisted-collect can move real motors; read SAFETY.md, then add --apply")
+    if args.mapping != "absolute":
+        raise SystemExit("assisted-collect requires --mapping absolute")
+    print("MOTOR-WRITE SAFETY GATE: seven arm motors; gripper remains torque-off.")
+    print("Support GELLO, clear all pinch points, keep the physical power disconnect reachable.")
+    print("Experimental XL330 model-1200 arms / model-1190 gripper; Goal Current <=100 mA.")
+    answer = input("Press Enter to authorize assisted setup, or q then Enter to cancel: ")
+    if answer.strip():
+        print("Cancelled; no motor bus was opened.")
+        return 1
+    return collect(args)
 
 
 def _hardware_arguments(parser) -> None:
@@ -363,6 +463,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="directory containing LIBERO config.yaml; equivalent to LIBERO_CONFIG_PATH",
     )
     run.set_defaults(func=collect)
+    assist_parser = sub.add_parser(
+        "assisted-collect", parents=[copy.deepcopy(run)], add_help=False,
+        help="EXPERIMENTAL opt-in motor-assisted alignment, then passive collection",
+    )
+    assist_parser.add_argument("--apply", action="store_true", help="permit bounded physical arm-motor writes during setup")
+    assist_parser.set_defaults(
+        func=assisted_collect, assisted=True, window_scale=3.0, output_root="runs/assisted-a6",
+    )
     return parser
 
 

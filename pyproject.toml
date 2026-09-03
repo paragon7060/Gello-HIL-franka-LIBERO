@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gello-hil-franka-libero"
-version = "0.1.0"
+version = "0.2.0"
 description = "GELLO human-in-the-loop joint teleoperation for Franka Panda in LIBERO"
 readme = "README.md"
 requires-python = ">=3.10"

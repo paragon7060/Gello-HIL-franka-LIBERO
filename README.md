@@ -7,10 +7,12 @@ Human-in-the-loop joint teleoperation for a Franka Panda in
 [한국어 사용법](docs/usage.ko.md) · [Safety](SAFETY.md) ·
 [Architecture](docs/architecture.md) · [Attribution](THIRD_PARTY_NOTICES.md)
 
-> **Public v0.1 is passive, read-only teleoperation.** It controls the simulated
-> Panda's joints, not the physical GELLO motors. Powered alignment, homing,
-> timed motor holding, and private exact-failure experiment workflows are not
-> included. Do not expect a motor-assisted handoff from these commands.
+> **Default `collect` is passive and read-only.** Version 0.2 also includes an
+> **experimental, opt-in** `assisted-collect --apply` command that can move real
+> GELLO arm motors during setup. Read [the assisted guide](docs/assisted.md) and
+> [SAFETY.md](SAFETY.md) first. The current A6 live-release revision is
+> **unvalidated: further tests and physical execution were explicitly deferred**.
+> Older A5 tests do not certify A6. Autonomous homing/private failure states are excluded.
 
 ## Start here
 
@@ -24,6 +26,7 @@ attempt automatically; there is no output JSON to copy into the next command.
 | Install and locate GELLO | [Setup](#setup) and [serial device](#1-find-the-serial-device) |
 | Fix joint direction or a constant angular offset | [Calibration](#3-calibrate) and [mapping check](#4-mapping-check) |
 | Start a demonstration | [Collect](#5-collect-one-hil-attempt) |
+| Use bounded motor assistance to align first | [Assisted collection](#6-optional-motor-assisted-alignment) |
 | Pause, rest, or re-anchor | [Keys and mapping modes](#keys) |
 | Repeat an attempt or inspect a result | [Repeat a session](#repeat-a-session) and [artifacts](#artifacts) |
 | Connection, calibration, or display problem | [Troubleshooting](#troubleshooting) |
@@ -232,7 +235,7 @@ rebasing it; align the physical GELLO to the simulated Panda before resuming.
 
 LIBERO success ends the attempt automatically. Otherwise it ends at 1000
 active steps, a runtime error, or when `q` is pressed. There is no post-success
-review/recollect key or automatic advance to another task in public v0.1.
+review/recollect key or automatic advance to another task in the public CLI.
 
 ### Repeat a session
 
@@ -270,6 +273,47 @@ of a saved directory alone does not mean the task succeeded. The command exits
 with code `0` for success and `1` otherwise. A zero-action attempt need not have
 a video. Recorded actions have eight components: seven joint commands and one
 gripper command; they are not seven-dimensional OSC end-effector actions.
+
+## 6. Optional motor-assisted alignment (A6, unvalidated)
+
+After calibration and mapping verification, the assisted command helps you
+manually bring GELLO near the **ordinary LIBERO initial pose**, then hands the
+same scene/window to Enter-anchored joint teleoperation:
+
+```bash
+gello-hil assisted-collect \
+  --port "$GELLO_PORT" \
+  --calibration calibration.json \
+  --libero-config-path "$LIBERO_CONFIG_PATH" \
+  --suite libero_object --task-id 4 --state-index 0 \
+  --max-active-steps 1000 \
+  --apply
+```
+
+This command is restricted to the registered XL330 setup (arm model `1200`,
+gripper model `1190`, `57600` baud). It checks identities and existing mode-5,
+torque-off, power/temperature and startup state before arming. It does not
+automatically convert an incompatible device's operating mode.
+
+- READY allows **0.60 rad maximum and RMS joint error**, with the existing
+  stationary dwell checks. Directional assistance remains capped at 100 mA,
+  P=750, and a 20-count waypoint; this is not autonomous full-pose homing.
+- At READY, **Enter starts control immediately and reduces existing force over
+  2 seconds while you control**. There is no release-then-wait gap or second Enter.
+  Current counts and the frozen follower pose define the start offset; the first
+  action is neutral. Each later clutch Enter re-anchors the same way.
+- Setup stays frozen, but live-release actions consume the normal ACTIVE budget
+  and are explicitly labeled motor-assisted. Space releases/pauses; q releases/aborts.
+- Already-near passive starts do not turn motors on just to show a countdown.
+- All outcomes are saved under `runs/assisted-a6/<UTC>/`; `attempt.json` includes
+  alignment telemetry, timings, safety/cleanup results, and handoff events.
+
+Support the physical arm throughout and keep the power disconnect reachable.
+See [the full guide and troubleshooting](docs/assisted.md). The base collection
+success/retry behavior is unchanged; calibration remains a separate CLI step.
+The unchanged 40-count tracking cap can cause an early verified release if you
+backdrive during the fade. Other hardware safety failures abort; no force cap
+is increased to make alignment easier.
 
 ## Troubleshooting
 

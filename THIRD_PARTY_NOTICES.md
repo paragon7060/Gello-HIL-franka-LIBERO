@@ -19,3 +19,9 @@ MIT-licensed projects:
 No upstream source repository, dataset, model checkpoint, or run artifact is
 vendored here. Install compatible upstream packages separately and follow each
 project's license and citation requirements.
+
+The optional motor-assist state machine, bounded transport, and live-release
+handoff are project-local implementations, not an official GELLO reproduction.
+Official GELLO is a calibration/mapping convention reference; no RoboCopilot
+or LeRobot runtime or dataset schema is borrowed. The optional port does not
+include research failure-state manifests, trajectories, or private run logs.

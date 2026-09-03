@@ -131,3 +131,30 @@ class AbsoluteJointFollower(_FollowerBase):
         self._previous_raw_target = raw_target.copy()
         action, common = self._finish(counts, current, raw_target)
         return action, {**common, **diagnostic}
+
+
+class EnterAnchoredFollower(AbsoluteJointFollower):
+    """A6: keep calibrated continuity, but remove pose mismatch at each Enter."""
+
+    mode = "enter-anchored"
+
+    def anchor(self, counts, follower_joints):
+        result = super().anchor(counts, follower_joints)
+        self.offset = self._follower_anchor - self._leader_anchor
+        self.first_neutral = True
+        result["enter_target_offset_radians"] = self.offset.tolist()
+        return result
+
+    def action(self, counts, follower_joints):
+        _, absolute = super().action(counts, follower_joints)
+        target = np.asarray(absolute["raw_target_joint_positions"]) + self.offset
+        action, diagnostic = self._finish(counts, np.asarray(follower_joints), target)
+        if self.first_neutral:
+            action[:] = 0.0
+            diagnostic["normalized_arm_action"] = action[:7].tolist()
+            diagnostic["gripper_action"] = 0.0
+            self.first_neutral = False
+        return action, {
+            **absolute, **diagnostic,
+            "enter_target_offset_radians": self.offset.tolist(),
+        }

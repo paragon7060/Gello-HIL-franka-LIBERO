@@ -162,6 +162,31 @@ class GelloCalibration:
         current = float(modular_count_delta(counts[self.gripper_id], self.gripper_open_count))
         return float(np.clip(current / total, 0.0, 1.0))
 
+    @property
+    def joint_position_limits(self):
+        """Compatibility with the independently tested alignment safety core."""
+        return self.joint_limits
+
+    def mapped_joint_positions(self, counts):
+        return self.mapped_joints(counts)
+
+    def alignment_diagnostics(self, counts, follower_joints, *, tolerance_rad):
+        target = np.asarray(follower_joints, dtype=np.float64)
+        if target.shape != (7,) or not np.isfinite(target).all():
+            raise ValueError("alignment target must contain seven finite joints")
+        if not np.isfinite(tolerance_rad) or tolerance_rad <= 0:
+            raise ValueError("alignment tolerance must be finite and positive")
+        mapped = self.mapped_joints(counts)
+        error = target - mapped
+        return {
+            "mapped_leader_joint_positions": mapped,
+            "alignment_error_radians": error,
+            "required_count_deltas": np.rint(
+                np.asarray(self.joint_signs) * error * COUNTS_PER_REVOLUTION / (2 * np.pi)
+            ).astype(np.int64),
+            "alignment_ready": bool(np.max(np.abs(error)) <= tolerance_rad),
+        }
+
     def to_json(self, path: Path) -> None:
         payload = {"schema_version": SCHEMA_VERSION, **asdict(self)}
         path.parent.mkdir(parents=True, exist_ok=True)
