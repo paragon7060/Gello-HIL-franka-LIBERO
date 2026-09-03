@@ -4,9 +4,29 @@ Human-in-the-loop joint teleoperation for a Franka Panda in
 [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO), using a passive
 [GELLO](https://github.com/wuphilipp/gello_software) as the leader device.
 
-This repository is a cleaned, public release of the reusable GELLO/LIBERO
-interaction layer. It contains no experiment logs, private failure states,
-model checkpoints, absolute workstation paths, or hidden evaluation data.
+[한국어 사용법](docs/usage.ko.md) · [Safety](SAFETY.md) ·
+[Architecture](docs/architecture.md) · [Attribution](THIRD_PARTY_NOTICES.md)
+
+> **Public v0.1 is passive, read-only teleoperation.** It controls the simulated
+> Panda's joints, not the physical GELLO motors. Powered alignment, homing,
+> timed motor holding, and private exact-failure experiment workflows are not
+> included. Do not expect a motor-assisted handoff from these commands.
+
+## Start here
+
+First use: **install → probe → calibrate → mapping check → collect**.
+Later sessions: probe again, preferably capture fresh calibration, check mapping
+after any assembly change, then collect. Each collection command saves a new
+attempt automatically; there is no output JSON to copy into the next command.
+
+| Goal | Where to go |
+| --- | --- |
+| Install and locate GELLO | [Setup](#setup) and [serial device](#1-find-the-serial-device) |
+| Fix joint direction or a constant angular offset | [Calibration](#3-calibrate) and [mapping check](#4-mapping-check) |
+| Start a demonstration | [Collect](#5-collect-one-hil-attempt) |
+| Pause, rest, or re-anchor | [Keys and mapping modes](#keys) |
+| Repeat an attempt or inspect a result | [Repeat a session](#repeat-a-session) and [artifacts](#artifacts) |
+| Connection, calibration, or display problem | [Troubleshooting](#troubleshooting) |
 
 ## What is included
 
@@ -29,17 +49,29 @@ model checkpoints, absolute workstation paths, or hidden evaluation data.
   - `relative-clutch` maps motion from the latest `Enter` anchor onto the
     current simulated pose. Re-anchoring produces a zero arm action.
 
-The public v0.1 release intentionally does **not** enable GELLO motor torque or
-automatic homing. Motorized alignment needs a separate, hardware-specific
-safety review. See [SAFETY.md](SAFETY.md).
+This is a standalone interaction-layer release, not an official GELLO
+reproduction. It contains no experiment logs, private failure states, model
+checkpoints, workstation paths, or hidden evaluation data.
 
-## Hardware and software
+## Setup
 
-- A seven-joint GELLO plus an optional passive gripper servo, normally IDs
+### Requirements
+
+- A seven-joint GELLO plus a passive gripper servo, normally IDs
   `1..7` and `8`.
 - A stable serial path under `/dev/serial/by-id/`.
 - Python 3.10, NumPy `<2`, robosuite 1.4.x, and a working LIBERO installation.
 - MuJoCo off-screen rendering (EGL is recommended on a GPU workstation).
+- A desktop/display for the OpenCV operator window. Off-screen MuJoCo rendering
+  does not remove the need for a GUI display during interactive collection.
+- Correctly assembled and externally supported GELLO; use the power and wiring
+  specified for your hardware. Read [SAFETY.md](SAFETY.md) before connecting it.
+
+The CLI currently reads all eight IDs, including the gripper. Its examples
+assume IDs `1..7` for the arm and `8` for the gripper; a missing device is not
+silently ignored.
+
+### Install
 
 Follow the official installation instructions for
 [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) and
@@ -60,14 +92,6 @@ export LIBERO_CONFIG_PATH=/absolute/path/to/libero-config-directory
 ```
 
 or pass `--libero-config-path` to `mapping-check` and `collect`.
-
-For development:
-
-```bash
-python -m pip install -e '.[dev]'
-python -m pytest
-python -m ruff check src tests
-```
 
 ## 1. Find the serial device
 
@@ -94,6 +118,9 @@ gello-hil probe --port "$GELLO_PORT"
 This pings IDs 1 through 8 and reads their Present Position values. It sends no
 register writes and does not enable torque.
 
+Proceed only when every expected ID responds. A missing device or timeout is a
+connection check failure, not a calibration problem.
+
 ## 3. Calibrate
 
 Calibration must be repeated whenever servo assembly, horn orientation, motor
@@ -113,10 +140,15 @@ At step 1, match each physical GELLO joint to this Panda reference:
 J1=0, J2=0, J3=0, J4=-90 deg, J5=0, J6=+90 deg, J7=0
 ```
 
-Match the joints individually, not only the end-effector or arm silhouette.
-Then press `Enter`, capture gripper-open, and capture gripper-closed. The code
+The public calibration command uses **terminal prompts**, not a rendered
+calibration wizard. Match the joints individually, not only the end-effector or
+arm silhouette. Then press `Enter`, capture gripper-open, and capture
+gripper-closed without moving the arm. The code
 tests all four quarter-turn branches per joint and rejects a capture whose
 residual is larger than the configured threshold.
+
+A small residual is a consistency check, not proof that the physical reference
+pose was correct. Recheck individual joints if the later preview disagrees.
 
 Joint signs depend on motor installation. The example signs are the assembly
 used to validate this release; they are not universal. If one rendered joint
@@ -143,7 +175,17 @@ same joint and direction on screen. The display reports mapped joint values and
 reference-pose error in radians. It modifies render-state joint positions only;
 it issues no control action and calls no simulator step. Press `q` to exit.
 
+Unlike collection, this preview updates immediately as GELLO moves; no Enter is
+needed. It does not create a pass/fail attestation artifact. The displayed error
+is relative to the fixed calibration reference, not a requirement to keep every
+joint at zero error while inspecting motion.
+
 ## 5. Collect one HIL attempt
+
+`--suite`, `--task-id`, and `--state-index` select an ordinary LIBERO initial
+state. Task IDs are suite-specific: check the natural-language instruction in
+the window rather than assuming that a number always names the same object.
+This public command does not restore a private policy-failure checkpoint.
 
 Absolute mapping, matching the current calibrated GELLO pose:
 
@@ -189,7 +231,22 @@ In `relative-clutch` mode, the first arm action after every `Enter` is zero. In
 rebasing it; align the physical GELLO to the simulated Panda before resuming.
 
 LIBERO success ends the attempt automatically. Otherwise it ends at 1000
-active steps or when `q` is pressed.
+active steps, a runtime error, or when `q` is pressed. There is no post-success
+review/recollect key or automatic advance to another task in public v0.1.
+
+### Repeat a session
+
+Run the same `gello-hil collect ...` command again to retry the same task/state.
+Every attempt gets its own timestamped directory, including failures and
+aborts. Change `--task-id` or `--state-index` explicitly for another episode.
+
+For a fresh calibration, run the same calibration command and answer `y` to
+the English overwrite prompt. To preserve separate calibration files, pass a
+new `--output` name and use that same name with `--calibration` in both later
+commands. Calibration is **not automatically repeated** by `collect`.
+
+To enlarge the visualized environment without increasing render resolution,
+add `--window-scale 3 --resolution 256` to `mapping-check` or `collect`.
 
 ## Artifacts
 
@@ -208,22 +265,48 @@ per-step target/follower diagnostics. `trajectory.npz` stores actions, raw
 encoder counts, and follower joints without Python pickles. Every outcome is
 preserved; the collector never overwrites a previous attempt.
 
+Check `success`, `aborted`, `error`, and `session` in `attempt.json`; the presence
+of a saved directory alone does not mean the task succeeded. The command exits
+with code `0` for success and `1` otherwise. A zero-action attempt need not have
+a video. Recorded actions have eight components: seven joint commands and one
+gripper command; they are not seven-dimensional OSC end-effector actions.
+
 ## Troubleshooting
 
+- **`/dev/serial` does not exist:** connect the USB adapter and inspect the
+  serial-device directory again; do not use another machine's saved device path.
+- **`SYNC_READ missing IDs [1, ..., 8]`:** the serial port opened but no expected
+  servos replied. Check hardware power, data-chain connections, configured IDs
+  and baudrate, and whether another program owns the port. Retry the read-only
+  probe before calibration; do not bypass the check or enable torque to fix it.
 - **A joint moves backward:** invert that one entry in `--joint-signs`, then
   recalibrate and repeat mapping check.
-- **J4 or J6 differs by about pi radians:** the wrong quarter-turn branch was
-  captured. Return every joint to the exact reference pose and recalibrate.
+- **A joint has a roughly constant 90°/180° offset:** suspect reference-pose or
+  assembly-offset calibration before changing its sign. Return every joint to
+  the reference and recalibrate. A sign error reverses the *direction of change*;
+  a constant offset alone does not establish a sign error.
 - **`Numba needs NumPy 2.0 or less`:** activate the intended LIBERO environment,
   ensure `numpy<2`, and prevent an incompatible user-site package from taking
   precedence (for example, `PYTHONNOUSERSITE=1`).
-- **The viewer is small:** raise `--window-scale`; simulation render resolution
-  can stay at 256.
+- **The viewer is small:** use `--window-scale 3 --resolution 256`. This scales
+  the camera image itself, not just the window border.
+- **It stops after success:** expected; rerun `collect` for another attempt.
+- **It stops without success:** inspect `error` and the terminal session event in
+  `attempt.json`. The active-step horizon and an abort also end the attempt.
 - **Pause still advances:** file an issue with a minimal reproduction. The unit
   contract forbids action-budget or simulator-step consumption while paused.
 
-Korean usage notes are in [docs/usage.ko.md](docs/usage.ko.md). Architecture and
-data contracts are in [docs/architecture.md](docs/architecture.md).
+## Development
+
+```bash
+python -m pip install -e '.[dev]'
+python -m pytest
+python -m ruff check src tests
+```
+
+These unit checks do not validate your physical assembly, power supply, or
+mapping direction. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for changes and
+keep generated runs, calibration captures, and hardware identifiers out of Git.
 
 ## Attribution
 
