@@ -28,7 +28,7 @@ def json_safe(value):
 class FileDisplay:
     """Display adapter, never a motor transport. Abort has priority over other buttons."""
 
-    def __init__(self, root, *, motor_permitted):
+    def __init__(self, root, *, motor_permitted, operator_view="camera"):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.motor_permitted = bool(motor_permitted)
@@ -41,6 +41,7 @@ class FileDisplay:
         self.events = []
         self.last_button = None
         self.last_publish = 0.0
+        self.initial_operator_view = operator_view
 
     def set_state(self, **fields):
         self.state.update(json_safe(fields))
@@ -98,6 +99,10 @@ class FileDisplay:
             request = json.loads(path.read_text())
             command = request["command"]
             mode, phase = self.state.get("mode"), self.state.get("phase")
+            if command == "view":
+                accepted = request.get("value") in ("camera", "policy")
+                self.events.append({**request, "accepted": accepted, "mode": mode, "phase": phase})
+                continue
             allowed = command == "abort" or (
                 self.motor_permitted
                 and (
@@ -131,16 +136,26 @@ class FileDisplay:
             "confirmation_required": True,
             "motor_authorization_source": "explicit_gui_assist_or_start_button",
             "commands_directory": str(self.root / "commands"),
+            "initial_operator_view": self.initial_operator_view,
+            "worker_and_video_pixel_convention": "openvla_raw_180_degrees",
+            "camera_view_transform": "horizontal_flip_of_policy_view_display_only",
         }
 
 
 def preview_scene(args):
-    """Initial scene before calibration selection; no serial bus is opened."""
+    """Initial scene without serial, or explicit read-only joint mapping preview."""
     from .position import make_position_env
-    from .libero_runtime import rgb_frame
+    from .libero_runtime import rgb_frame, render_joint_pose
+    from .calibration import GelloCalibration
+    from .cli import _bus
 
-    display = FileDisplay(args.gui_control_dir, motor_permitted=False)
+    display = FileDisplay(
+        args.gui_control_dir,
+        motor_permitted=False,
+        operator_view=getattr(args, "gui_operator_view", "camera"),
+    )
     environment = None
+    bus = None
     try:
         environment, observation, instruction = make_position_env(args)
         display.set_state(
@@ -150,9 +165,28 @@ def preview_scene(args):
             notice="Initial scene. Choose a calibration to enable alignment and collection.",
         )
         display.publish(cv2.cvtColor(rgb_frame(observation), cv2.COLOR_RGB2BGR), force=True)
+        if getattr(args, "gui_mapping_check", False):
+            calibration = GelloCalibration.from_json(Path(args.calibration))
+            bus = _bus(args)
         while display.waitKey(20) != ord("q"):
-            pass
+            if bus is not None:
+                counts = bus.read_positions(calibration.arm_ids + (calibration.gripper_id,))
+                joints = calibration.mapped_joints(counts)
+                frame = render_joint_pose(environment, joints)
+                display.set_state(
+                    mode="mapping_check",
+                    phase="MAPPING CHECK",
+                    joint_degrees=np.rad2deg(joints).tolist(),
+                    notice="Move one joint at a time; read-only pose preview, no physics steps.",
+                )
+                display.publish(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+                time.sleep(0.18)
+    except Exception as error:
+        display.set_state(error=f"{type(error).__name__}: {error}")
+        raise
     finally:
+        if bus is not None:
+            bus.close()
         if environment is not None:
             environment.close()
         display.set_state(mode="preview", phase="CLOSED")

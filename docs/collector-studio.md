@@ -36,9 +36,45 @@ device is visible, its port is filled automatically; otherwise enter its path in
 **Connection**. Baud rate is fixed to 57600, with arm IDs 1–7 and gripper ID 8.
 
 Without a calibration file, the initial scene opens without any serial communication.
-Choose **Calibration...** to load a verified calibration, or supply
+Choose **Load calibration...** to load a verified calibration, or supply
 `--calibration /path/to/calibration.json` at launch. Device settings are locked while
 the encoder/alignment/collection worker is open; stop that scene before changing them.
+The loaded file's full path appears below Connection and can be copied. The last
+valid selection is remembered privately in the pool's `gui-settings.json`.
+An explicit `--calibration` overrides the remembered file. `GELLO_CALIBRATION` is an
+optional local fallback when no file has been selected; no workstation path is built
+into the shared source. Historical imported captures are labeled as such.
+
+### Create a new calibration
+
+Click **New calibration**. The current scene releases and closes before the wizard
+opens; recording and motor assistance do not run during calibration. The wizard uses
+the original read-only calibration method and the same 25 samples per capture:
+
+1. Choose each joint's **+1 / -1 sign** for the actual assembly. Defaults are examples.
+2. Match GELLO joint-by-joint to **J1=0°, J2=0°, J3=0°, J4=-90°, J5=0°, J6=+90°, J7=0°**.
+   Hold still and click **Capture reference pose**.
+3. Keep the arm at the reference pose, fully open the gripper, then click **Capture open gripper**.
+4. Fully close the gripper, then click **Capture closed gripper**.
+5. Click **Save & use calibration** and save a new JSON file. It is immediately
+   connected to the collector and remembered for the next launch.
+
+The suggested location is `<dataset-root>/calibrations/<UTC timestamp>.json`.
+Existing files are never overwritten. **Restart captures** lets you repeat the procedure;
+an invalid reference residual or gripper span stays at the current step. Errors close
+the serial reader before allowing another capture. Closing during a read waits for
+that finite read to finish. The numerical check does not replace physical sign/mapping
+verification before motor assistance. Creation never sends a motor-register write.
+
+The existing terminal method also remains available:
+
+```bash
+python -m gello_hil.cli calibrate --port "$GELLO_PORT" --baudrate 57600 \
+  --joint-signs 1 1 1 -1 1 -1 1 --output runs/my-new-session/calibration.json
+```
+
+Follow the three Enter prompts, using the signs for your assembly. Load the output
+with **Load calibration...**. Keep calibration files and local settings out of Git.
 
 Omit `--apply` to disable motor and collection commands. Reviewing videos and
 confirming existing candidates remains available. Merely opening the window never
@@ -57,6 +93,7 @@ starts motor assistance or records a demonstration.
 | Button | Action |
 | --- | --- |
 | **Open scene** | Load the selected task's registered initial state |
+| **Check joint mapping** | Read encoders and render the calibrated joint pose without collection or motor writes |
 | **Motor assist** | Request the original bounded A6 alignment procedure |
 | **Start collection** | Start from an aligned pose, or re-anchor and resume from pause |
 | **Pause** | Release force and clutch; pause physics and the active-step budget |
@@ -83,6 +120,35 @@ Closing the app requests the worker's normal force-release and save path.
 The original A6 current/gain/tracking/guide/watchdog limits and gripper torque-off
 behavior remain in force. See the [assisted workflow](assisted.md) for the hardware
 procedure and limitations. No actual motor validation is implied by simulated tests.
+
+### Left/right motion and joint signs
+
+The viewer now defaults to **Camera view (unmirrored)**. Previously the operator
+display reused OpenVLA's policy preprocessing, which rotates raw pixels 180 degrees
+and reverses their horizontal direction. **Policy view (180 deg)** remains available
+for comparison. This selector changes only what the operator sees: raw observations,
+saved actions, the video pixel convention, and export preprocessing stay unchanged.
+The initial display mode and changes during collection are recorded in the GUI events.
+
+The joint equation remains the official GELLO convention,
+`q = (encoder_radians - assembly_offset) * joint_sign`, with equivalent 2π branches.
+No global action-axis inversion or unverified joint-sign changes are applied.
+The physical assembly still determines each sign; a single reference pose cannot
+determine a joint's direction from motion.
+
+Before collection, load/create a calibration and click **Check joint mapping**:
+
+1. Move one physical joint at a time and compare the rendered joint and displayed J1–J7 angles.
+2. Check J1/J3/J5 particularly if sideways motions appear reversed; confirm every joint,
+   rather than changing a group of signs solely from end-effector motion.
+3. If one joint moves in the wrong angular direction, select the correct sign in
+   **New calibration**, repeat all three captures, save a new file and check again.
+4. Press **Open scene** to return to the registered scene, then explicitly request
+   assistance/start. The mapping preview itself cannot arm assistance or collect actions.
+
+Only the registered scene's ten initialization warmup steps run before mapping preview;
+subsequent pose rendering advances no physics. A numerical official-source/FK comparison
+is documented in the [calibration and coordinate audit](../reports/CALIBRATION_MAPPING_VALIDATION_KO.md).
 
 ## Saving, retries and training selection
 

@@ -10,13 +10,14 @@ import cv2
 from PySide6 import QtCore as C, QtGui as G, QtWidgets as W
 
 from .collector_gui import SceneWorker, button_permissions
+from .calibration_setup import remember_calibration, selected_calibration
 from .pool import init_pool, inspect_pool
 from .review import confirm_attempt, enable_review
 
 
 STYLE = """
 QWidget { color:#e8eff8; font-family:'DejaVu Sans'; font-size:13px; }
-QMainWindow, QWidget#workspace { background:#0b111b; }
+QMainWindow, QDialog, QWidget#workspace { background:#0b111b; }
 QFrame#card { background:#131e2e; border:1px solid #223147; border-radius:12px; }
 QFrame#viewer { background:#080e17; border:1px solid #223147; border-radius:12px; }
 QLabel#brand { font-size:25px; font-weight:700; letter-spacing:-0.5px; }
@@ -29,6 +30,8 @@ QLabel#badge { background:#1a3b34; color:#6ae9c9; border-radius:7px; padding:6px
 QLabel#reviewTitle { font-size:16px; font-weight:600; }
 QLineEdit { background:#0e1725; border:1px solid #2a3a50; border-radius:7px; padding:9px 12px; selection-background-color:#275148; }
 QLineEdit:focus { border:1px solid #42dcba; }
+QComboBox { background:#0e1725; border:1px solid #2a3a50; border-radius:5px; padding:6px; }
+QComboBox QAbstractItemView { background:#131e2e; color:#e8eff8; selection-background-color:#20473e; }
 QPushButton { background:#202e42; border:1px solid #2d3e56; border-radius:8px; padding:10px 15px; font-weight:600; }
 QPushButton:hover { background:#2a3c54; border-color:#4b647f; }
 QPushButton:pressed { background:#16243a; }
@@ -80,6 +83,22 @@ class ImageView(W.QLabel):
         self.setMinimumSize(320, 240)
         self.setSizePolicy(W.QSizePolicy.Policy.Expanding, W.QSizePolicy.Policy.Expanding)
         self.original = None
+        self.camera_view = True
+
+    def set_camera_view(self, enabled):
+        self.camera_view = bool(enabled)
+        self.repaint_image()
+
+    def oriented_pixmap(self):
+        if self.original is None:
+            return None
+        # The worker and videos keep policy pixels. Only the operator display
+        # undoes the horizontal component of OpenVLA's 180-degree rotation.
+        return (
+            self.original.transformed(G.QTransform().scale(-1, 1))
+            if self.camera_view
+            else self.original
+        )
 
     def show_image(self, image):
         self.original = G.QPixmap.fromImage(image)
@@ -88,7 +107,7 @@ class ImageView(W.QLabel):
     def repaint_image(self):
         if self.original is not None:
             self.setPixmap(
-                self.original.scaled(
+                self.oriented_pixmap().scaled(
                     self.size(),
                     C.Qt.AspectRatioMode.KeepAspectRatio,
                     C.Qt.TransformationMode.SmoothTransformation,
@@ -107,11 +126,16 @@ class CollectorWindow(W.QMainWindow):
         self.root = Path(args.dataset_root).resolve()
         self.plan = init_pool(self.root, args.plan)
         enable_review(self.root)
+        self.args.calibration = selected_calibration(
+            self.root, args.calibration, os.environ.get("GELLO_CALIBRATION")
+        )
         self.frozen = (self.root / "pool-manifest.json").exists()
         self.worker = worker_factory(args)
         self.key, self.shot = self.plan["tasks"][0]["key"], 1
         self.selected_attempt = None
         self.pending = None
+        self.pending_calibration = False
+        self.pending_mapping = False
         self.closing = False
         self.refreshing = False
         self.capture = None
@@ -128,6 +152,7 @@ class CollectorWindow(W.QMainWindow):
         self.resize(min(1510, screen.width() - 60), min(1000, screen.height() - 60))
         self.setMinimumSize(1120, 800)
         self._layout()
+        self.calibration_info()
         self.refresh()
         pending = next((s for s in self.data["cases"] if not s["accepted"]), self.data["cases"][0])
         self.key, self.shot = pending["task_key"], pending["shot"]
@@ -202,8 +227,10 @@ class CollectorWindow(W.QMainWindow):
         self.calibration = W.QLineEdit(self.args.calibration or "")
         self.calibration.setPlaceholderText("Choose the calibration for this GELLO assembly")
         row.addWidget(self.calibration, 3)
-        self.calibration_button = self.button("Calibration...", self.choose_calibration)
+        self.calibration_button = self.button("Load calibration...", self.choose_calibration)
         row.addWidget(self.calibration_button)
+        self.new_calibration_button = self.button("New calibration", self.new_calibration)
+        row.addWidget(self.new_calibration_button)
         row.addSpacing(8)
         self.port = W.QLineEdit(self.args.port or "")
         self.port.setPlaceholderText("Serial port")
@@ -212,6 +239,12 @@ class CollectorWindow(W.QMainWindow):
             label("MOTOR CONTROLS ENABLED" if self.args.apply else "READ-ONLY REVIEW", "badge")
         )
         box.addLayout(row)
+        self.calibration_hint = label("", "muted", wrap=True)
+        self.calibration_hint.setTextInteractionFlags(
+            C.Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        box.addWidget(self.calibration_hint)
+        self.calibration.editingFinished.connect(self.calibration_info)
         outer.addWidget(connection)
         workspace = W.QHBoxLayout()
         workspace.setSpacing(18)
@@ -248,7 +281,13 @@ class CollectorWindow(W.QMainWindow):
         self.view_badge = label("INITIAL SCENE", "eyebrow")
         viewer_top.addWidget(self.view_badge)
         viewer_top.addStretch()
-        viewer_top.addWidget(label("AGENT CAMERA", "eyebrow"))
+        self.view_orientation = W.QComboBox()
+        self.view_orientation.addItems(["Camera view (unmirrored)", "Policy view (180 deg)"])
+        self.view_orientation.setToolTip(
+            "Display only. Joint signs, actions and raw training observations do not change."
+        )
+        self.view_orientation.currentIndexChanged.connect(self.change_view_orientation)
+        viewer_top.addWidget(self.view_orientation)
         display.addLayout(viewer_top)
         self.preview = ImageView()
         display.addWidget(self.preview, 1)
@@ -266,6 +305,8 @@ class CollectorWindow(W.QMainWindow):
         capture = W.QHBoxLayout()
         capture.setSpacing(8)
         capture.addWidget(self.button("Open scene", self.open_scene))
+        self.mapping_button = self.button("Check joint mapping", self.check_joint_mapping)
+        capture.addWidget(self.mapping_button)
         self.buttons = {}
         for name, title, command, appearance in [
             ("assist", "Motor assist", lambda: self.send("assist"), None),
@@ -442,6 +483,8 @@ class CollectorWindow(W.QMainWindow):
         self.show_attempt(next(d for d in self.slot()["details"] if d["path"] == path))
 
     def navigate(self, key, shot):
+        self.pending_mapping = False
+        self.pending_calibration = False
         if self.worker.running:
             if self.state.get("mode") == "collection" and self.state.get("phase") == "ACTIVE":
                 self.refresh()
@@ -471,21 +514,112 @@ class CollectorWindow(W.QMainWindow):
             self.status.setText("Stop the current scene before changing the device calibration.")
             return
         file, _ = W.QFileDialog.getOpenFileName(
-            self, "Choose the calibration for this physical assembly", "", "Calibration (*.json)"
+            self,
+            "Choose the calibration for this physical assembly",
+            str(
+                Path(self.calibration.text()).parent
+                if self.calibration.text()
+                else self.root / "calibrations"
+            ),
+            "Calibration (*.json)",
         )
         if file:
-            self.calibration.setText(file)
-            self.open_scene()
+            try:
+                self.use_calibration(file)
+            except Exception as error:
+                self.error(error)
+
+    def calibration_info(self):
+        from .calibration import GelloCalibration
+
+        value = self.calibration.text().strip()
+        self.calibration.setToolTip(value)
+        if not value:
+            self.calibration_hint.setText(
+                "No calibration selected. Load an existing JSON or choose New calibration."
+            )
+            return
+        try:
+            path = Path(value).expanduser().resolve()
+            GelloCalibration.from_json(path)
+            meta = json.loads(path.read_text())
+            historical = meta.get("import_provenance", {}).get(
+                "historical_capture_not_fresh_calibration"
+            )
+            self.calibration_hint.setText(
+                f"{'Historical import - verify current assembly' if historical else 'Calibration loaded'}: {path}"
+            )
+            self.calibration.setCursorPosition(len(value))
+        except Exception as error:
+            self.calibration_hint.setText(f"Calibration needs attention: {error}")
+
+    def use_calibration(self, file):
+        self.args.calibration = remember_calibration(self.root, file)
+        self.calibration.setText(self.args.calibration)
+        self.calibration_info()
+        self.open_scene()
+
+    def new_calibration(self):
+        if self.closing or self.review_future or self.frozen:
+            return
+        if self.worker.running:
+            self.pending = None
+            self.pending_calibration = True
+            self.pending_mapping = False
+            self.worker.send("abort")
+            self.status.setText("Closing the current scene before read-only calibration...")
+            return
+        from .calibration_dialog import CalibrationDialog
+        from .review import pool_lock
+
+        self.args.port = self.port.text().strip()
+        try:
+            with pool_lock(self.root):
+                dialog = CalibrationDialog(self.args, self.root, self)
+                dialog.exec()
+            if dialog.saved_path:
+                self.use_calibration(dialog.saved_path)
+        except Exception as error:
+            self.error(error)
+
+    def change_view_orientation(self, index):
+        self.preview.set_camera_view(index == 0)
+        self.args.operator_view = "camera" if index == 0 else "policy"
+        self.worker.send("view", value=self.args.operator_view)
+
+    def check_joint_mapping(self):
+        if self.worker.running:
+            self.worker.send("abort")
+            self.pending_mapping = True
+            self.pending_calibration = False
+            self.pending = None
+            self.status.setText("Closing the scene before read-only joint mapping...")
+            return
+        try:
+            self.args.calibration = remember_calibration(self.root, self.calibration.text().strip())
+            self.args.port = self.port.text().strip()
+            self.close_video()
+            self.worker.open(self.key, self.shot, mapping_check=True)
+            self.selected_attempt = None
+            self.frame_stamp = None
+            self.status.setText(
+                "Move one joint at a time. Read-only preview: no physics steps or motor writes."
+            )
+        except Exception as error:
+            self.error(error)
 
     def open_scene(self, checked=False, *, retry=False):
         try:
             self.args.calibration = self.calibration.text().strip()
             self.args.port = self.port.text().strip()
+            if self.args.calibration:
+                self.args.calibration = remember_calibration(self.root, self.args.calibration)
+                self.calibration_info()
             if self.worker.running:
                 if (
                     self.worker.slot == (self.key, self.shot)
                     and not retry
-                    and self.state.get("mode") != "preview"
+                    and self.state.get("mode") in ("alignment", "collection")
                 ):
                     return
                 self.pending = (self.key, self.shot, retry)
@@ -515,6 +649,8 @@ class CollectorWindow(W.QMainWindow):
 
     def stop(self):
         self.pending = None
+        self.pending_mapping = False
+        self.pending_calibration = False
         if self.worker.running:
             self.worker.send("abort")
             self.status.setText("Releasing motors and saving the raw attempt...")
@@ -634,6 +770,7 @@ class CollectorWindow(W.QMainWindow):
                     title = {
                         "LOADING": "Loading initial scene",
                         "PREVIEW": "Initial scene / select calibration",
+                        "MAPPING CHECK": "Read-only joint mapping",
                         "PAUSED": "Ready to collect / paused",
                         "ACTIVE": "Recording demonstration",
                         "ALIGNMENT READY": "Alignment ready",
@@ -645,6 +782,12 @@ class CollectorWindow(W.QMainWindow):
                     )
                     if self.state.get("instruction"):
                         self.instruction.setText(self.state["instruction"])
+                    if self.state.get("mode") == "mapping_check":
+                        angles = self.state.get("joint_degrees", [])
+                        self.detail.setText(
+                            "Mapped joints (deg):\n"
+                            + "  ".join(f"J{i}: {value:+.1f}" for i, value in enumerate(angles, 1))
+                        )
                     image = self.worker.control / "frame.jpg"
                     if image.exists() and image.stat().st_mtime_ns != self.frame_stamp:
                         self.frame_stamp = image.stat().st_mtime_ns
@@ -663,7 +806,13 @@ class CollectorWindow(W.QMainWindow):
                         self.status.setText(
                             "Review the video. Confirm & next saves the selection; Retry shot preserves the previous attempt."
                         )
-                    elif result["returncode"] and not self.pending and not self.closing:
+                    elif (
+                        result["returncode"]
+                        and not self.pending
+                        and not self.pending_calibration
+                        and not self.pending_mapping
+                        and not self.closing
+                    ):
                         self.phase.setText("Scene unavailable")
                         self.detail.setText("Check the renderer and LIBERO-Pro configuration.")
                         self.error(f"Scene preparation failed. Log: {result['log_file']}")
@@ -672,6 +821,21 @@ class CollectorWindow(W.QMainWindow):
                         self.pending = None
                         self.refresh()
                         self.open_scene(retry=retry)
+                    elif self.pending_calibration and not self.closing:
+                        self.pending_calibration = False
+                        if result["state"].get("error"):
+                            self.error(
+                                "Calibration not opened: review the previous scene error first. "
+                                + str(result["state"]["error"])
+                            )
+                        else:
+                            self.new_calibration()
+                    elif self.pending_mapping and not self.closing:
+                        self.pending_mapping = False
+                        if result["state"].get("error"):
+                            self.error("Mapping not opened: review the previous scene error first.")
+                        else:
+                            self.check_joint_mapping()
             candidate = next(
                 (d for d in self.slot()["details"] if d["path"] == self.selected_attempt), {}
             )
@@ -693,6 +857,18 @@ class CollectorWindow(W.QMainWindow):
             )
             for widget in (self.calibration, self.calibration_button, self.port):
                 widget.setEnabled(bool(settings_editable))
+            self.new_calibration_button.setEnabled(
+                not self.closing
+                and not self.review_future
+                and not self.frozen
+                and self.state.get("phase") != "ACTIVE"
+            )
+            self.mapping_button.setEnabled(
+                not self.closing
+                and not self.review_future
+                and not self.frozen
+                and self.state.get("phase") != "ACTIVE"
+            )
             if self.closing and not self.worker.running and not self.review_future:
                 self.close()
         except Exception as error:
@@ -702,6 +878,8 @@ class CollectorWindow(W.QMainWindow):
         if self.worker.running or self.review_future:
             self.closing = True
             self.pending = None
+            self.pending_calibration = False
+            self.pending_mapping = False
             self.worker.send("abort")
             self.status.setText("Releasing motors and preserving the raw attempt before closing...")
             event.ignore()

@@ -176,7 +176,14 @@ python -m gello_hil.cli position-pool-gui \
 모든 화면 문구는 영어이며 Qt6 폰트 렌더링을 사용한다. 기존 Tk/저해상도 문구 대신
 과제·shot 목록, 넓은 장면/영상 뷰어, 상태별 버튼과 시도 이력을 한 화면에 배치했다.
 처음에는 실제 native 초기 장면이 보인다. 보정 파일을 아직 선택하지 않은 초기 장면은
-serial 통신 없이 표시한다. **Calibration...**에서 현재 조립의 보정 JSON을 고른다.
+serial 통신 없이 표시한다. **Load calibration...**에서 현재 조립의 보정 JSON을 고른다.
+경로는 Connection 아래에 표시하고 마지막 유효 파일을 다음 실행에도 기억한다.
+**New calibration**에서는 현재 장면을 종료한 뒤, 실제 조립의 joint sign을 선택하고
+기준 관절 자세→gripper 완전 열림→완전 닫힘을 각각 캡처한다. 원래 CLI와 같은25sample,
+quarter-turn offset 계산과 residual/span 검사를 사용하며 motor register 쓰기는 없다.
+**Save & use calibration**으로 새 JSON을 저장하면 바로 연결한다.
+기본 저장 위치는 pool의 `calibrations/<UTC timestamp>.json`이며 기존 파일은 덮어쓰지 않는다.
+터미널의 원래 `calibrate` 명령도 3절대로 사용할 수 있다.
 `--calibration "$SESSION/calibration.json"`을 실행 시 지정해도 된다.
 encoder/alignment worker가 열린 뒤에는 장치/보정 설정을 잠그므로 **Stop & review** 후 변경한다.
 
@@ -186,6 +193,7 @@ encoder/alignment worker가 열린 뒤에는 장치/보정 설정을 잠그므�
 | 영어 버튼 | 수행 내용 |
 | --- | --- |
 | **Open scene** | 선택 task/shot의 등록된 초기 장면을 연다 |
+| **Check joint mapping** | encoder만 읽어 보정된 관절 pose/각도를 표시한다. 수집/모터 쓰기는 없다 |
 | **Motor assist** | 명시적으로 기존 제한된 A6 정렬을 요청한다 |
 | **Start collection** | 정렬된 상태에서 수집 시작, 또는 pause에서 현재 자세로 re-anchor/재개 |
 | **Pause** | force 해제와 clutch/pause, physics·active budget 정지 |
@@ -201,6 +209,14 @@ motor write0이다. 이때도 **Motor assist** 클릭만으로 수집을 시작�
 다음 shot은 초기 장면만 자동으로 열고 보조·수집 시작은 다시 버튼을 기다린다.
 ACTIVE 중 과제 이동은 차단하고 pause/stop을 먼저 사용한다.
 창 닫기는 worker의 정상 force 해제·기록 완료를 기다리며 강제 kill하지 않는다.
+
+영상은 기본 **Camera view (unmirrored)**로 표시한다. 이전 조작 화면에 쓰던 OpenVLA의
+180도 회전은 가로 방향도 뒤집기 때문에, 학습용 **Policy view (180 deg)**와 구분했다.
+화면 모드만 바꾸며 raw 관측/action/영상 저장 규칙이나 학습 export를 뒤집지 않는다.
+시작 화면 모드와 수집 중 변경은 GUI 이벤트에 기록한다.
+관절 변환식은 공식 GELLO와 비교했고 sign을 임의로 반전하지 않았다.
+좌우 이동만으로 특정 joint sign을 단정할 수 없으므로, 먼저 **Check joint mapping**에서
+J1–J7을 하나씩 움직여 확인하고 반대인 관절은 **New calibration**에서 올바른 sign으로 재캡처한다.
 
 [SAFETY.md](../SAFETY.md)와 [기존 A6 절차](assisted.md)를 따른다.
 arm current100mA, P750, guide20counts, tracking40counts, 5Hz/watchdog 제한과

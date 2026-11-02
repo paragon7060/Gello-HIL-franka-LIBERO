@@ -8,6 +8,7 @@ import time
 from .actuation import (
     GelloActuationSafetyError, GelloTrackingError, HomingState,
 )
+from .dynamixel import COUNTS_PER_REVOLUTION
 
 
 LIVE_HANDOFF_CONTRACT = {
@@ -115,7 +116,11 @@ class LiveTorqueHandoff:
             raise RuntimeError("live handoff bus is closed")
         self.tick()
         if self.powered:
-            return self.bus.sync_read_control_item("present_position_counts", motor_ids)
+            # Match the read-only successor's one-turn mapping input contract.
+            # Raw signed positions remain in tick telemetry for safety monitoring.
+            positions = self.bus.sync_read_control_item("present_position_counts", motor_ids)
+            return {motor_id: int(value) % COUNTS_PER_REVOLUTION
+                    for motor_id, value in positions.items()}
         if self.reader is None:
             if self.read_only_factory is None:
                 raise RuntimeError("read-only successor was not configured")

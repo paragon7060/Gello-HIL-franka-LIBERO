@@ -1,0 +1,200 @@
+{
+  "date": "2026-11-02",
+  "branch": "REPA-VLA",
+  "base_commit": "e6f86235249aab18545e886a35a9b92cd2f16ed4",
+  "tests": {
+    "tests": 103,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "ruff_passed": true,
+  "whitespace_check_passed": true,
+  "official_sources": {
+    "commit": "204f53a64bef89471a1e483b0f874f755fbd2d3a",
+    "files": {
+      "gello/robots/dynamixel.py": {
+        "url": "https://raw.githubusercontent.com/wuphilipp/gello_software/204f53a64bef89471a1e483b0f874f755fbd2d3a/gello/robots/dynamixel.py",
+        "sha256": "336da179a7f07f12326804c967840fc1b1fb7be6b0ad741dffffda6ec3f76b9f"
+      },
+      "gello/agents/gello_agent.py": {
+        "url": "https://raw.githubusercontent.com/wuphilipp/gello_software/204f53a64bef89471a1e483b0f874f755fbd2d3a/gello/agents/gello_agent.py",
+        "sha256": "f128bb5434f85d42a0987a44586b225fca5748743f572b0c4ccab11c06487f4f"
+      },
+      "scripts/gello_get_offset.py": {
+        "url": "https://raw.githubusercontent.com/wuphilipp/gello_software/204f53a64bef89471a1e483b0f874f755fbd2d3a/scripts/gello_get_offset.py",
+        "sha256": "144807f65857eba5ffae43f97a4036135b7c3d97c8d6d9b8ac9899199ecdc67a"
+      }
+    }
+  },
+  "coordinate_audit": {
+    "official_gello_commit": "204f53a64bef89471a1e483b0f874f755fbd2d3a",
+    "official_mapping_samples": 1000,
+    "mapping_max_error_rad_modulo_2pi": 0,
+    "native_positive_axes": [
+      {
+        "axis": "x",
+        "positive_native_goal_delta": [
+          0.012500000000000011,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "axis": "y",
+        "positive_native_goal_delta": [
+          0.0,
+          0.0125,
+          0.0
+        ]
+      },
+      {
+        "axis": "z",
+        "positive_native_goal_delta": [
+          0.0,
+          0.0,
+          0.012499999999999956
+        ]
+      }
+    ],
+    "all_seven_joint_deltas": [
+      {
+        "joint": 1,
+        "encoder_delta": 16,
+        "expected_joint_delta": 0.02454369260617026,
+        "actual_joint_delta": 0.02454369260617018,
+        "eef_delta": [
+          -0.00013599400230177028,
+          0.011081231951224223,
+          0.0
+        ]
+      },
+      {
+        "joint": 2,
+        "encoder_delta": 16,
+        "expected_joint_delta": 0.02454369260617026,
+        "actual_joint_delta": 0.024543692606170175,
+        "eef_delta": [
+          -0.0018961037781427825,
+          -2.77700802124512e-15,
+          -0.011059631070216014
+        ]
+      },
+      {
+        "joint": 3,
+        "encoder_delta": 16,
+        "expected_joint_delta": 0.02454369260617026,
+        "actual_joint_delta": 0.024543692606169287,
+        "eef_delta": [
+          -0.00012907892438707158,
+          0.010655637201051713,
+          -2.0968102651730547e-05
+        ]
+      },
+      {
+        "joint": 4,
+        "encoder_delta": 16,
+        "expected_joint_delta": -0.02454369260617026,
+        "actual_joint_delta": -0.024543692606170175,
+        "eef_delta": [
+          -0.009866164887328221,
+          -5.719529559079767e-14,
+          -0.010206708472654258
+        ]
+      },
+      {
+        "joint": 5,
+        "encoder_delta": 16,
+        "expected_joint_delta": 0.02454369260617026,
+        "actual_joint_delta": 0.024543692606170616,
+        "eef_delta": [
+          2.119070571360293e-05,
+          0.0026404886541162987,
+          2.451647014112268e-05
+        ]
+      },
+      {
+        "joint": 6,
+        "encoder_delta": 16,
+        "expected_joint_delta": -0.02454369260617026,
+        "actual_joint_delta": -0.024543692606170175,
+        "eef_delta": [
+          -0.005131683004729742,
+          -1.9100823569498427e-14,
+          -0.0018098940489403859
+        ]
+      },
+      {
+        "joint": 7,
+        "encoder_delta": 16,
+        "expected_joint_delta": 0.02454369260617026,
+        "actual_joint_delta": 0.024543692606170175,
+        "eef_delta": [
+          0.0,
+          3.0683010319245094e-19,
+          0.0
+        ]
+      }
+    ],
+    "post_initialization_physics_steps": 0,
+    "initialization_warmup_steps": 10,
+    "simulator_state_byte_exact": true,
+    "actual_serial_opened": false,
+    "actual_motor_register_writes": 0,
+    "joint_signs_changed": false,
+    "passed": true
+  },
+  "wizard_desktop_QA": {
+    "real_serial_used": false,
+    "motor_register_writes": 0,
+    "synthetic_only": true,
+    "screenshots": [
+      "collector-connection.png",
+      "new-calibration-reference.png",
+      "new-calibration-ready.png"
+    ],
+    "passed": true,
+    "all_three_captures": true,
+    "serial_closed": true
+  },
+  "native_mapping_desktop_QA": {
+    "passed": true,
+    "real_serial_used": false,
+    "motor_register_writes": 0,
+    "synthetic_encoder": true,
+    "actual_native_scene": true,
+    "initialization_warmup_steps": 10,
+    "mapping_physics_steps": 0,
+    "collection_actions": 0,
+    "reader_closed": true,
+    "camera_view": "unmirrored",
+    "joint_degrees": [
+      3.339843749999995,
+      -2.109374999999993,
+      -5.361328125000004,
+      -95.9765625,
+      6.67968749999999,
+      99.49218749999999,
+      -4.74609374999999
+    ],
+    "screenshot": "mapping-camera-view.png"
+  },
+  "physical_joint_signs_verified": false,
+  "existing_calibration_signs_changed": false,
+  "existing_user_attempts_modified": false,
+  "actual_serial_used_by_these_tests": false,
+  "actual_motor_register_writes_by_these_tests": 0,
+  "raw_observation_action_export_conventions_changed": false,
+  "auto_retry_launched": false,
+  "source_sha256": {
+    "src/gello_hil/calibration_dialog.py": "0dc097640d0116140c5634c8fea0bacde6912b3690642a513db5d82d4c975457",
+    "src/gello_hil/calibration_setup.py": "442e787d13cca2e44aa6e34c8eb20d52219b38aa78ef02d1d70b7df09a23f30a",
+    "src/gello_hil/collector_qt.py": "f9a6aacf7b0d451e58081ae5b2dc196f79209136f17dd0d8a895849bbc830db3",
+    "src/gello_hil/collector_gui.py": "aa27c3bd64700ff3a3c2ebc814fafcc4c604b3aef8473db5272d898e0f2fc873",
+    "src/gello_hil/gui_bridge.py": "38cdd93a3c48553fce30dc94dfc9570c51cce54cb9805db0c3b04f821676272c",
+    "src/gello_hil/cli.py": "d900ec764435397ccbe0ed9891cc5c6cc27fca674d37ba1b46caf9a331fd1c39",
+    "src/gello_hil/live_handoff.py": "d1c37be99eb3e736d2e142e12fd385e7ab1883532c17f49c298afdff4b623cef",
+    "tests/test_calibration_setup.py": "28e05dc04d00201498007bc3efbbcdf2fb71d00be403c41eab1222303f1df2dd",
+    "tests/test_operator_mapping.py": "148d443c86338c8546ef8320158df6ef4a7bce111ba1eccc338a136185cf0e36"
+  }
+}

@@ -477,7 +477,7 @@ class _AlignmentStopped(Exception):
 
 def assisted_collect(args) -> int:
     # No bus is opened by this authorization path.
-    if getattr(args, "gui_scene_preview_only", False):
+    if getattr(args, "gui_scene_preview_only", False) or getattr(args, "gui_mapping_check", False):
         from .gui_bridge import preview_scene
         _configure_libero(args)
         return preview_scene(args)
@@ -487,7 +487,8 @@ def assisted_collect(args) -> int:
         raise SystemExit("assisted-collect requires --mapping absolute")
     if getattr(args, "gui_control_dir", None):
         from .gui_bridge import FileDisplay
-        args.gui_display = FileDisplay(args.gui_control_dir, motor_permitted=bool(args.apply))
+        args.gui_display = FileDisplay(args.gui_control_dir, motor_permitted=bool(args.apply),
+                                       operator_view=getattr(args, "gui_operator_view", "camera"))
         args.operator_review_required = True
         return collect(args)
     print("MOTOR-WRITE SAFETY GATE: seven arm motors; gripper remains torque-off.")
@@ -610,6 +611,8 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--gui-control-dir", help=argparse.SUPPRESS)
         p.add_argument("--gui-preview-only", action="store_true", help=argparse.SUPPRESS)
         p.add_argument("--gui-scene-preview-only", action="store_true", help=argparse.SUPPRESS)
+        p.add_argument("--gui-mapping-check", action="store_true", help=argparse.SUPPRESS)
+        p.add_argument("--gui-operator-view", choices=("camera", "policy"), default="camera", help=argparse.SUPPRESS)
         p.add_argument("--operator-review-required", action="store_true", help=argparse.SUPPRESS)
         p.set_defaults(func=position_collect, mapping="relative-clutch" if name == "collect-position" else "absolute",
                        assisted=(name == "assisted-position"),

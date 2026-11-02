@@ -58,7 +58,7 @@ class SceneWorker:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def open(self, key, shot, *, retry=False, previous=None):
+    def open(self, key, shot, *, retry=False, previous=None, mapping_check=False):
         if self.running:
             raise RuntimeError("Wait for the previous scene to release and save.")
         if (self.root / "pool-manifest.json").exists():
@@ -68,6 +68,10 @@ class SceneWorker:
         for field in ("libero_source", "libero_config_path"):
             if not getattr(self.args, field, None) or not Path(getattr(self.args, field)).exists():
                 raise ValueError(f"Check setting: {field}")
+        if mapping_check and (
+            not self.args.calibration or not Path(self.args.calibration).is_file()
+        ):
+            raise ValueError("Load or create a calibration before checking joint mapping.")
         from .position import resolve_case
 
         resolve_case(self.root / "pool-plan.json", key, None, shot)
@@ -87,6 +91,7 @@ class SceneWorker:
                 "retry_requested" if retry else "scene_opened",
                 previous_attempt=previous,
                 session=token,
+                mapping_check=bool(mapping_check),
             )
             command = [
                 sys.executable,
@@ -124,7 +129,11 @@ class SceneWorker:
                 "3",
                 "--max-active-steps",
                 str(self.args.max_active_steps),
+                "--gui-operator-view",
+                getattr(self.args, "operator_view", "camera"),
             ]
+            if mapping_check:
+                command += ["--gui-mapping-check"]
             command += ["--apply"] if self.args.apply else ["--gui-preview-only"]
             if not self.args.calibration or not Path(self.args.calibration).is_file():
                 command += ["--gui-scene-preview-only"]
@@ -142,7 +151,7 @@ class SceneWorker:
             self.release()
             raise
 
-    def send(self, command):
+    def send(self, command, **fields):
         if not self.running:
             return
         if command == "abort":
@@ -159,6 +168,7 @@ class SceneWorker:
                     "command": command,
                     "requested_at_monotonic": time.monotonic(),
                     "operator_source": "desktop_button",
+                    **fields,
                 },
             )
 
