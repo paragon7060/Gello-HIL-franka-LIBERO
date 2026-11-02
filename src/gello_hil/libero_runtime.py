@@ -49,6 +49,13 @@ def rgb_frame(obs) -> np.ndarray:
     return np.asarray(obs["agentview_image"], dtype=np.uint8)[::-1, ::-1].copy()
 
 
+def wrist_frame(obs) -> np.ndarray | None:
+    """Eye-in-hand camera in the same 180-degree convention, for the operator only."""
+    if "robot0_eye_in_hand_image" not in obs:
+        return None
+    return np.asarray(obs["robot0_eye_in_hand_image"], dtype=np.uint8)[::-1, ::-1].copy()
+
+
 def render_joint_pose(env, joints) -> np.ndarray:
     """Render a Panda pose without a control action or physics step."""
 

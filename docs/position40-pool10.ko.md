@@ -203,11 +203,24 @@ encoder/alignment worker가 열린 뒤에는 장치/보정 설정을 잠그므�
 | **Confirm & next** | 성공 시도의 원본 검증·채택 후 다음 미확인 shot 선택 |
 | **Next pending** | 다음 미확인 슬롯으로 이동 |
 
+양손이 GELLO에 있을 때는 키보드(또는 같은 키로 설정한 풋페달)를 쓴다.
+**Enter**=Start collection, **Space**=Pause, **M**=Motor assist, **Esc**=Stop & review.
+입력칸에 커서가 있으면 Esc 외의 단축키는 무시한다. 수집 중에는 오른쪽 아래에 active step/예산,
+성공 유지(n/20), gripper 열림·닫힘, 최대 관절 추종 오차, 실제 루프 Hz를 표시하고,
+장면 옆에 손목 카메라를 함께 띄운다(표시 전용, 저장 규칙은 그대로).
+
 **장면 확인 → Motor assist → Start collection → 영상 검토 → Retry shot 또는 Confirm & next**
 순서다. 모터 보조가 필요 없을 정도로 가까운 자세이면 기존 passive-start를 사용하며
 motor write0이다. 이때도 **Motor assist** 클릭만으로 수집을 시작하지 않는다.
 다음 shot은 초기 장면만 자동으로 열고 보조·수집 시작은 다시 버튼을 기다린다.
-ACTIVE 중 과제 이동은 차단하고 pause/stop을 먼저 사용한다.
+ACTIVE 중 과제 이동은 차단하고 pause/stop을 먼저 사용한다. step이 기록된 PAUSED 시도에서
+다른 슬롯·mapping·보정으로 이동하면 확인 창을 띄우며, 승인 시 해당 시도는 aborted로 저장된다.
+실행 중에는 **Retry shot**을 비활성화한다(진행 중인 시도를 끊지 않는다).
+**Start collection**은 모터 보조를 켜지 않는다. 버튼을 누른 순간 다시 읽은 자세가 근접 기준을
+벗어나 있으면 PAUSED에 머물며 정렬 또는 **Motor assist**를 안내한다.
+근접 시작과 A6 READY 기준은 관절 최대 0.15 rad / RMS 0.10 rad이다. enter-anchored 매핑에서는
+시작 순간의 관절 offset이 시연 내내 유지되므로 기존 0.60 rad보다 좁혔다.
+GUI 프로세스가 비정상 종료되면 worker가 부모 소실을 감지해 정상 abort(힘 해제·저장) 경로로 끝난다.
 창 닫기는 worker의 정상 force 해제·기록 완료를 기다리며 강제 kill하지 않는다.
 
 영상은 기본 **Camera view (unmirrored)**로 표시한다. 이전 조작 화면에 쓰던 OpenVLA의
@@ -229,6 +242,13 @@ gripper torque-off는 그대로다. **GELLO를 지지하고 전원 차단에 접
 최소20 active-step 연속 native success와 최종 true, 관측/action 정렬, calibration/provenance를
 통과해야 확인할 수 있다. 실패나 중단을 확인하여 성공으로 바꿀 수 없다.
 미확인 성공은 진행률과 export에 포함하지 않는다. 장면/목표/XY/instruction도 수정하지 않는다.
+
+수집 중 encoder 읽기가 실패하면 같은 포트로 2회 재시도하고, 그래도 실패하면 포트를 다시 연다.
+연결이 돌아오지 않으면 시도를 끝내지 않고 자동 pause한다(`encoder_read_faults`에 기록).
+USB/전원을 확인한 뒤 **Start collection**으로 현재 자세에서 re-anchor해 이어간다.
+시뮬레이터 step은 native control rate(20 Hz)로 고정한다. `long_*`(LIBERO-10) 과제의
+active-step 예산은 `--long-max-active-steps`(기본 1500), 나머지는 `--max-active-steps`(기본 1000)이다.
+성공 뒤 유지 구간의 0-motion action 수는 `success_settle_steps`로 남긴다.
 
 실패 후 앱을 다시 실행하지 않고 **Retry shot**을 누른다. 이전 NPZ/영상/실패/이벤트는 남는다.
 이미 확인한 slot을 재시도해도 새 후보를 확인하기 전까지 기존 채택은 유지한다.
@@ -327,13 +347,18 @@ Qt6 GUI의 실제 Spatial init0 장면과 영상→확인→다음 shot 흐름�
 새 GUI의 문구·버튼·상태는 영어다. 상세 검증과 screenshot 위치는
 [GUI 검증 보고](../reports/REPA_VLA_GUI_VALIDATION_KO.md)를 참고한다.
 
-현재 데스크톱에서 CPU Mesa 장면 렌더링이 필요하면 실행 전에 다음을 지정한다.
-robosuite1.4의 backend 선택 때문에 `glfw`가 EGL로 바뀌는 조합 대신 아래 GLX 조합을 확인했다.
-설치된 simulator 코드는 수정하지 않는다.
+렌더링은 GPU를 사용한다. RTX 4090에서 `MUJOCO_GL=glx`(NVIDIA) 또는 `egl`의 simulator step은
+약 10 ms였고, CPU Mesa(`LIBGL_ALWAYS_SOFTWARE=1`, `__GLX_VENDOR_LIBRARY_NAME=mesa`)는 약 92 ms로
+제어 루프가 7 Hz 근처에 머물렀다. GPU 드라이버가 없는 데스크톱에서만 CPU Mesa를 사용한다.
+`runs/start_position40_pool10.sh`는 `GELLO_SOFTWARE_GL=1`일 때만 CPU Mesa로 바꾼다.
+`glfw`는 robosuite1.4에서 EGL로 바뀌므로 쓰지 않는다. 설치된 simulator 코드는 수정하지 않는다.
+
+FTDI adapter의 기본 latency timer(16 ms)는 SYNC_READ마다 지연을 더한다. 실행 전 1 ms로 낮춘다.
 
 ```bash
-export MUJOCO_GL=glx
-export PYOPENGL_PLATFORM=glx
-export LIBGL_ALWAYS_SOFTWARE=1
-export __GLX_VENDOR_LIBRARY_NAME=mesa
+echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB0/latency_timer
 ```
+
+재부팅 뒤에도 유지하려면 udev 규칙
+`ACTION=="add", SUBSYSTEM=="usb-serial", DRIVER=="ftdi_sio", ATTR{latency_timer}="1"`을
+`/etc/udev/rules.d/99-ftdi-latency.rules`에 둔다. 시작 스크립트는 값이 1이 아니면 경고한다.

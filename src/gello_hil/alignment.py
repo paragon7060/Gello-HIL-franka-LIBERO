@@ -526,9 +526,11 @@ class AlignmentRunner:
                                 self.limits.ready_max_abs_error_rad
                             ),
                         )
-                        if (getattr(self.display, "last_button", None) == "assist"
-                                and near_pose_passive_start_ready(diagnostic, self.passive_start_contract)):
-                            # Assist is not the Start button. A near-pose check stays paused.
+                        button = getattr(self.display, "last_button", None)
+                        near = near_pose_passive_start_ready(diagnostic, self.passive_start_contract)
+                        if button == "assist" and near or button == "start" and not near:
+                            # Assist is not the Start button, and Start never arms
+                            # assistance: a pose that drifted away stays paused.
                             active_controller.verify_near_pose_passive_start()
                             summary = active_controller.summary()
                             if int(summary.get("motor_register_writes", -1)) != 0:
@@ -539,7 +541,13 @@ class AlignmentRunner:
                             active_bus = None
                             pause_started = time.monotonic()
                             status = "PAUSED"
-                            notice = "Already aligned, torque OFF: press Start to collect"
+                            notice = (
+                                "Already aligned, torque OFF: press Start to collect"
+                                if near else
+                                "Not aligned at Start (max "
+                                f"{float(diagnostic['max_abs_target_error_rad']):.2f} rad): "
+                                "align GELLO or press Motor assist"
+                            )
                             continue
                         if finish_near_pose_passive_start(
                             diagnostic,

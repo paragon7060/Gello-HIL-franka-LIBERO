@@ -103,6 +103,13 @@ starts motor assistance or records a demonstration.
 | **Confirm & next** | Validate and accept the selected success, then select the next pending shot |
 | **Next pending** | Navigate to an unconfirmed slot |
 
+Keyboard shortcuts (or a foot pedal mapped to the same keys) keep both hands on GELLO:
+**Enter** = Start collection, **Space** = Pause, **M** = Motor assist, **Esc** = Stop & review.
+Only Esc works while a text field has focus. During collection the review panel shows
+active steps and budget, the success hold (n/20), gripper open/closed, the largest joint
+tracking error and the measured loop rate. The wrist camera appears beside the scene
+for the operator only; saved observations and videos are unchanged.
+
 Typical flow:
 
 1. Inspect the initial scene and instruction. Select the current assembly's calibration.
@@ -114,7 +121,20 @@ Typical flow:
 If GELLO is already aligned, the existing passive-start path performs no motor writes.
 **Motor assist** still waits for a separate **Start collection** click. After confirming,
 only the next initial scene opens automatically; assistance and recording always wait
-for the operator. Switching tasks during active recording is blocked until pause/stop.
+for the operator. Switching tasks during active recording is blocked until pause/stop. Leaving a paused
+attempt that already recorded steps asks first; it is then saved as aborted. **Retry shot**
+is disabled while a scene is running. **Start collection** never arms motor assistance:
+if the pose drifted out of the near-pose gate when Start is pressed, the scene stays
+paused and asks for alignment or **Motor assist**. The near-pose and A6 READY gates are
+0.15 rad max / 0.10 rad RMS per joint, because the start offset persists for the whole
+demonstration under the Enter-anchored mapping. If the GUI process dies, the worker
+detects it and takes the normal abort path (release force, save).
+
+Encoder read faults during collection are retried twice and then the port is reopened.
+If the link stays down, the attempt pauses instead of ending (`encoder_read_faults`);
+fix USB/power and press **Start collection** to re-anchor and continue. Simulator steps
+are paced at the native 20 Hz control rate. `long_*` tasks use `--long-max-active-steps`
+(default 1500); other tasks use `--max-active-steps` (default 1000).
 Closing the app requests the worker's normal force-release and save path.
 
 The original A6 current/gain/tracking/guide/watchdog limits and gripper torque-off
@@ -201,16 +221,14 @@ The application uses English labels and Qt6 text rendering. `gui` installs
 `PySide6-Essentials`; QtWebEngine and a browser server are unnecessary. The app selects
 the Qt6 plugin directory to avoid OpenCV's bundled Qt5 plugin conflict.
 
-On the verified Linux desktop, CPU Mesa scene rendering worked with:
+Render on the GPU. On the RTX 4090 desktop a simulator step took about 10 ms with
+`MUJOCO_GL=glx` (NVIDIA) or `egl`, versus about 92 ms with CPU Mesa
+(`LIBGL_ALWAYS_SOFTWARE=1`, `__GLX_VENDOR_LIBRARY_NAME=mesa`), which held the control
+loop near 7 Hz. Use CPU Mesa only on a desktop without a working GPU driver.
+Set the FTDI latency timer to 1 ms (`echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB0/latency_timer`,
+or a udev rule) so each SYNC_READ does not wait for the 16 ms default.
 
-```bash
-export MUJOCO_GL=glx
-export PYOPENGL_PLATFORM=glx
-export LIBGL_ALWAYS_SOFTWARE=1
-export __GLX_VENDOR_LIBRARY_NAME=mesa
-```
-
-This requires a desktop display. In robosuite 1.4, other backend values can be forced
+GLX requires a desktop display. In robosuite 1.4, other backend values can be forced
 to EGL by its rendering setup. Select a working backend before launching the app;
 do not mix `PYOPENGL_PLATFORM=glx` with an EGL context. No installed simulator source
 needs editing. Worker errors are shown in the window and preserved in the session log.

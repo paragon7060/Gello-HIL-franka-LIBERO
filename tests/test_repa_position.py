@@ -120,7 +120,7 @@ class FakeEnv:
         self.closed = True
 
 
-def collect_fake(tmp_path, monkeypatch, *, keys, successes, budget=10, hold=2):
+def collect_fake(tmp_path, monkeypatch, *, keys, successes, budget=10, hold=2, bus=None):
     import gello_hil.libero_runtime as runtime
     import gello_hil.position as position
     import gello_hil.pose_control as pose
@@ -128,7 +128,7 @@ def collect_fake(tmp_path, monkeypatch, *, keys, successes, budget=10, hold=2):
     calfile = tmp_path / "calibration.json"
     calibration().to_json(calfile)
     env = FakeEnv(successes)
-    bus = SimpleNamespace(read_positions=lambda ids: counts())
+    bus = bus or SimpleNamespace(read_positions=lambda ids: counts())
 
     class Context:
         def __enter__(self):

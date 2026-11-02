@@ -6,6 +6,11 @@ from .actuation import GelloAlignmentAssistLimits
 from .alignment import AlignmentRunner
 from .live_handoff import LIVE_HANDOFF_CONTRACT
 
+# Enter-anchored mapping keeps the start offset for the whole demonstration, so
+# both the passive start and A6 READY gates stay close to the scene pose.
+START_MAX_ABS_ERROR_RAD = 0.15
+START_RMS_ERROR_RAD = 0.10
+
 
 def make_alignment_runner(args, calibration):
     calibration.validate()
@@ -15,7 +20,7 @@ def make_alignment_runner(args, calibration):
         raise ValueError("assisted-collect requires --window-scale >=3")
     limits = GelloAlignmentAssistLimits(
         profile="GELLO-ALIGN-A6",
-        ready_max_abs_error_rad=0.60, ready_rms_error_rad=0.60,
+        ready_max_abs_error_rad=START_MAX_ABS_ERROR_RAD, ready_rms_error_rad=START_RMS_ERROR_RAD,
     )
     config = {
         "protocol_version": "GELLO-HIL-ASSIST-v1",
@@ -31,7 +36,8 @@ def make_alignment_runner(args, calibration):
         "alignment_limits": asdict(limits),
         "alignment_handoff": dict(LIVE_HANDOFF_CONTRACT),
         "near_pose_passive_start": {
-            "max_abs_target_error_rad": 0.60, "rms_target_error_rad": 0.60,
+            "max_abs_target_error_rad": START_MAX_ABS_ERROR_RAD,
+            "rms_target_error_rad": START_RMS_ERROR_RAD,
         },
     }
     return AlignmentRunner(config=config, calibration=calibration,

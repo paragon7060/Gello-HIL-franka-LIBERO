@@ -30,6 +30,47 @@ def _bus(args):
     )
 
 
+class SerialReadFault(OSError):
+    """Encoder reads still failed after retries and a port reopen."""
+
+
+class RecoveringReader:
+    """Read-only encoder source that retries transient faults and reopens a dropped port."""
+
+    def __init__(self, factory, *, retries=2):
+        self.factory = factory  # returns a context manager, as _bus does
+        self.retries = int(retries)
+        self.context = None
+        self.bus = None
+        self.recovered_faults = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        self.close()
+
+    def close(self):
+        context, self.context, self.bus = self.context, None, None
+        if context is not None:
+            context.__exit__(None, None, None)
+
+    def read_positions(self, ids):
+        error = None
+        for _ in range(self.retries + 1):
+            try:
+                if self.bus is None:
+                    self.context = self.factory()
+                    self.bus = self.context.__enter__()
+                counts = self.bus.read_positions(ids)
+                self.recovered_faults += error is not None
+                return counts
+            except OSError as exc:  # TimeoutError, CRC errors and a vanished USB device
+                error = exc
+                self.close()
+        raise SerialReadFault(f"{type(error).__name__}: {error}") from error
+
+
 def _configure_libero(args) -> None:
     if getattr(args, "libero_config_path", None):
         os.environ["LIBERO_CONFIG_PATH"] = str(Path(args.libero_config_path).resolve())
@@ -158,14 +199,14 @@ def _json_safe(value):
 
 def _save_attempt(output, *, metadata, actions, counts, joints, frames, recorder=None, calibration=None) -> None:
     output.mkdir(parents=True, exist_ok=False)
-    np.savez_compressed(
-        output / "trajectory.npz",
-        actions=np.asarray(actions, dtype=np.float32).reshape((-1, metadata.get("action_dim", 8))),
-        counts=np.asarray(counts, dtype=np.int64).reshape((-1, 8)),
-        follower_joints=np.asarray(joints, dtype=np.float64).reshape((-1, 7)),
-        action_elapsed_seconds=np.asarray([d["action_elapsed_seconds"] for d in metadata["diagnostics"]], dtype=np.float64),
-    )
-    try:
+    try:  # attempt.json is always written, so a failed save never hides the attempt
+        np.savez_compressed(
+            output / "trajectory.npz",
+            actions=np.asarray(actions, dtype=np.float32).reshape((-1, metadata.get("action_dim", 8))),
+            counts=np.asarray(counts, dtype=np.int64).reshape((-1, 8)),
+            follower_joints=np.asarray(joints, dtype=np.float64).reshape((-1, 7)),
+            action_elapsed_seconds=np.asarray([d["action_elapsed_seconds"] for d in metadata["diagnostics"]], dtype=np.float64),
+        )
         if calibration is not None:
             snapshot = output / "calibration.json"
             calibration.to_json(snapshot)
@@ -190,8 +231,10 @@ def _save_attempt(output, *, metadata, actions, counts, joints, frames, recorder
     except Exception as exc:
         metadata["error"] = metadata.get("error") or f"artifact_error: {type(exc).__name__}: {exc}"
     finally:
-        (output / "attempt.json").write_text(
+        temporary = output / ".attempt.json.tmp"
+        temporary.write_text(
             json.dumps(_json_safe(metadata), indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        os.replace(temporary, output / "attempt.json")
 
 
 def collect(args) -> int:
@@ -199,7 +242,7 @@ def collect(args) -> int:
         raise ValueError("positive action budget, resolution and window scale required")
     _configure_libero(args)
     bridge = getattr(args, "gui_display", None)
-    from .libero_runtime import follower_joints, make_env, rgb_frame
+    from .libero_runtime import follower_joints, make_env, rgb_frame, wrist_frame
 
     calibration = GelloCalibration.from_json(Path(args.calibration))
     controller_class = (
@@ -228,6 +271,7 @@ def collect(args) -> int:
     if hold_steps < 1:
         raise ValueError("success hold must be at least one step")
     previous_action = None
+    serial_faults = []
     window = f"GELLO HIL {args.suite} task={args.task_id} state={args.state_index}"
     ids = calibration.arm_ids + (calibration.gripper_id,)
     try:
@@ -263,10 +307,13 @@ def collect(args) -> int:
                 raise RuntimeError(alignment["failure"] or "alignment not eligible")
             live_handoff = runner.live_handoff
             if live_handoff is not None:
-                live_handoff.read_only_factory = lambda: _bus(args)
+                live_handoff.read_only_factory = lambda: RecoveringReader(lambda: _bus(args))
         else:
             cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-        with (live_handoff if live_handoff is not None else _bus(args)) as bus:
+        control_period = 1.0 / float(getattr(getattr(env, "env", None), "control_freq", 20) or 20)
+        next_step_at = 0.0
+        step_times = []
+        with live_handoff if live_handoff is not None else RecoveringReader(lambda: _bus(args)) as bus:
             latest = None
             if assisted and alignment.get("collection_start_requested_by_alignment_enter"):
                 anchor = controller.anchor(bus.read_positions(ids), follower_joints(env))
@@ -281,9 +328,36 @@ def collect(args) -> int:
                 if live_handoff is not None:
                     live_handoff.begin()
             while not session.terminal:
+                if session.active:
+                    # Pace simulator steps at the native control rate (20 Hz).
+                    delay = next_step_at - time.monotonic()
+                    if delay > 0:
+                        time.sleep(delay)
                 if live_handoff is not None:
                     live_handoff.tick(session.active_step_count)
-                counts = bus.read_positions(ids)
+                try:
+                    counts = bus.read_positions(ids)
+                except SerialReadFault as exc:
+                    # Keep the attempt: clutch and wait for the operator to re-anchor.
+                    if session.active:
+                        session.pause(encoder_read_fault=str(exc),
+                                      current_follower_joint_positions=follower_joints(env).tolist())
+                        success_streak = 0
+                    serial_faults.append({"active_step_index": session.active_step_count,
+                                          "monotonic_elapsed_seconds": time.monotonic() - session._started_at,
+                                          "error": str(exc)})
+                    if bridge is not None:
+                        bridge.set_state(mode="collection", phase=session.status, encoder_fault=str(exc),
+                                         notice="ENCODER LINK LOST: check GELLO USB/power; press Start to resume")
+                        bridge.publish(force=True)
+                        command = "abort" if bridge.waitKey(0) & 0xFF == ord("q") else None
+                    else:
+                        command = poll_command(window)
+                    if command == "abort":
+                        session.abort()
+                        break
+                    time.sleep(0.5)
+                    continue
                 current = follower_joints(env)
                 target = calibration.mapped_joints(counts)
                 errors = target - current
@@ -297,9 +371,14 @@ def collect(args) -> int:
                     bridge.set_state(mode="collection", phase=session.status, instruction=instruction,
                         notice=notice, active_steps=session.active_step_count,
                         max_active_steps=args.max_active_steps, motor_powered=bool(live_handoff and live_handoff.powered),
+                        encoder_fault=None, gripper_ratio=calibration.gripper_ratio(counts),
+                        success_streak=success_streak, success_hold_steps=hold_steps,
+                        max_abs_joint_error_rad=float(np.max(np.abs(errors))),
+                        control_hz=(len(step_times) - 1) / (step_times[-1] - step_times[0])
+                        if len(step_times) > 1 and step_times[-1] > step_times[0] else None,
                         diagnostic={"mapped_joints": target.tolist(), "errors": errors.tolist()})
-                    bridge.publish(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-                    key = bridge.waitKey(10) & 0xFF
+                    bridge.publish(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR), wrist=wrist_frame(obs))
+                    key = bridge.waitKey(0 if session.active else 10) & 0xFF
                     command = {13: "resume", 10: "resume", 32: "pause", ord("q"): "abort"}.get(key)
                 else:
                     canvas = operator_panel(
@@ -330,7 +409,10 @@ def collect(args) -> int:
                     continue
                 if command == "resume" and not session.active:
                     if assisted:
-                        counts = bus.read_positions(ids)
+                        try:
+                            counts = bus.read_positions(ids)
+                        except SerialReadFault:
+                            continue  # stay paused; the fault branch reports it next loop
                         current = follower_joints(env)
                     anchor = controller.anchor(counts, current)
                     event = session.resume(
@@ -341,6 +423,8 @@ def collect(args) -> int:
                     )
                     if "enter_target_offset_radians" in anchor:
                         event["enter_target_offset_radians"] = anchor["enter_target_offset_radians"]
+                    next_step_at = 0.0
+                    step_times.clear()
                     continue  # Enter never consumes an action or simulator step.
                 if not session.active:
                     continue
@@ -357,6 +441,8 @@ def collect(args) -> int:
                     continue
                 latest["motor_assisted_transition"] = bool(live_handoff is not None and live_handoff.powered)
                 latest["action_elapsed_seconds"] = time.monotonic() - session._started_at
+                next_step_at = time.monotonic() + control_period
+                step_times[:] = [*step_times[-19:], time.monotonic()]
                 obs, reward, _done, _info = env.step(action.tolist())
                 session.record_active_step()
                 actions.append(action)
@@ -415,6 +501,9 @@ def collect(args) -> int:
             "control_hz": float(getattr(getattr(env, "env", None), "control_freq", 20)),
             "success_hold_steps": hold_steps,
             "native_success_streak": success_streak,
+            "success_settle_steps": sum(bool(d.get("success_settle")) for d in diagnostics),
+            "control_period_target_seconds": 1.0 / float(getattr(getattr(env, "env", None), "control_freq", 20) or 20),
+            "encoder_read_faults": serial_faults,
             "mapping_mode": controller.mode,
             "motor_assistance_requested": assisted,
             "operator_review_required": bool(getattr(args, "operator_review_required", False)),

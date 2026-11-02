@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import cv2
@@ -119,6 +120,56 @@ class ImageView(W.QLabel):
         self.repaint_image()
 
 
+def uncommitted_source():
+    """Tracked collector-source edits that the attempt commit hash would not capture."""
+    repository = Path(__file__).resolve().parents[2]
+    try:
+        return bool(subprocess.run(
+            ["git", "-C", str(repository), "status", "--porcelain", "--untracked-files=no", "--", "src"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip())
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def collection_summary(state):
+    """Operator HUD for the live worker state; the worker stays the source of truth."""
+    if state.get("encoder_fault"):
+        return f"{state.get('notice', '')}\n{state['encoder_fault']}"
+    if state.get("mode") == "alignment":
+        diagnostic = state.get("diagnostic") or {}
+        lines = [state.get("notice", "")]
+        if "max_abs_target_error_rad" in diagnostic:
+            lines.append(
+                f"Alignment error max {diagnostic['max_abs_target_error_rad']:.2f} rad"
+                f" / RMS {diagnostic.get('rms_target_error_rad', 0.0):.2f} rad"
+            )
+            lines.append(
+                "Near pose: Start collection is available"
+                if state.get("passive_start_ready")
+                else "Not near the scene pose: align GELLO or use Motor assist"
+            )
+        return "\n".join(line for line in lines if line)
+    if state.get("mode") != "collection":
+        return state.get("preview_error") or state.get("notice", "")
+    ratio = state.get("gripper_ratio")
+    lines = [
+        f"Step {state.get('active_steps', 0)} / {state.get('max_active_steps', '?')}"
+        f"   Success hold {state.get('success_streak', 0)} / {state.get('success_hold_steps', '?')}",
+    ]
+    if ratio is not None:
+        lines.append(f"Gripper {'CLOSED' if ratio >= 0.5 else 'OPEN'} ({ratio * 100:.0f}% closed)")
+    if state.get("max_abs_joint_error_rad") is not None:
+        rate = state.get("control_hz")
+        lines.append(
+            f"Max joint tracking error {state['max_abs_joint_error_rad']:.2f} rad"
+            + (f"   Loop {rate:.1f} Hz" if rate else "")
+        )
+    if state.get("notice"):
+        lines.append(state["notice"])
+    return "\n".join(lines)
+
+
 class CollectorWindow(W.QMainWindow):
     def __init__(self, args, *, worker_factory=SceneWorker):
         super().__init__()
@@ -141,6 +192,7 @@ class CollectorWindow(W.QMainWindow):
         self.capture = None
         self.playing = False
         self.frame_stamp = None
+        self.decoded_next = None
         self.state = {}
         self.review_future = None
         from concurrent.futures import ThreadPoolExecutor
@@ -152,6 +204,11 @@ class CollectorWindow(W.QMainWindow):
         self.resize(min(1510, screen.width() - 60), min(1000, screen.height() - 60))
         self.setMinimumSize(1120, 800)
         self._layout()
+        self._shortcuts()
+        if uncommitted_source():
+            self.source_badge.setText(
+                "SOURCE HAS UNCOMMITTED CHANGES: commit the collector before final demonstrations"
+            )
         self.calibration_info()
         self.refresh()
         pending = next((s for s in self.data["cases"] if not s["accepted"]), self.data["cases"][0])
@@ -289,8 +346,22 @@ class CollectorWindow(W.QMainWindow):
         self.view_orientation.currentIndexChanged.connect(self.change_view_orientation)
         viewer_top.addWidget(self.view_orientation)
         display.addLayout(viewer_top)
+        views = W.QHBoxLayout()
         self.preview = ImageView()
-        display.addWidget(self.preview, 1)
+        views.addWidget(self.preview, 1)
+        self.wrist_panel = W.QWidget()
+        wrist_layout = W.QVBoxLayout(self.wrist_panel)
+        wrist_layout.setContentsMargins(0, 0, 0, 0)
+        wrist_layout.addWidget(label("WRIST CAMERA", "eyebrow"))
+        self.wrist = ImageView()
+        self.wrist.setMinimumSize(220, 220)
+        self.wrist.setText("")
+        wrist_layout.addWidget(self.wrist, 1)
+        self.wrist_panel.setFixedWidth(280)
+        self.wrist_panel.hide()
+        views.addWidget(self.wrist_panel)
+        display.addLayout(views, 1)
+        self.wrist_stamp = None
         playback = W.QHBoxLayout()
         self.play_button = self.button("Play", self.toggle_video, "quiet")
         self.play_button.setFixedWidth(66)
@@ -309,14 +380,14 @@ class CollectorWindow(W.QMainWindow):
         capture.addWidget(self.mapping_button)
         self.buttons = {}
         for name, title, command, appearance in [
-            ("assist", "Motor assist", lambda: self.send("assist"), None),
-            ("start", "Start collection", lambda: self.send("start"), "primary"),
-            ("pause", "Pause", lambda: self.send("pause"), None),
+            ("assist", "Motor assist [M]", lambda: self.send("assist"), None),
+            ("start", "Start collection [Enter]", lambda: self.send("start"), "primary"),
+            ("pause", "Pause [Space]", lambda: self.send("pause"), None),
         ]:
             self.buttons[name] = self.button(title, command, appearance)
             capture.addWidget(self.buttons[name])
         capture.addStretch()
-        capture.addWidget(self.button("Stop && review", self.stop, "stop"))
+        capture.addWidget(self.button("Stop && review [Esc]", self.stop, "stop"))
         main.addLayout(capture)
         review, review_layout = card()
         review_row = W.QHBoxLayout()
@@ -359,7 +430,52 @@ class CollectorWindow(W.QMainWindow):
             wrap=True,
         )
         footer.addWidget(self.status, 1)
+        self.source_badge = label("", "muted")
+        footer.addWidget(self.source_badge)
         outer.addLayout(footer)
+
+    def _shortcuts(self):
+        # Keyboard keys (or a foot pedal mapped to them) while both hands hold GELLO.
+        for keys, name in (
+            (("Return", "Enter"), "start"),
+            (("Space",), "pause"),
+            (("M",), "assist"),
+            (("Escape",), "stop"),
+        ):
+            for key in keys:
+                shortcut = G.QShortcut(G.QKeySequence(key), self)
+                shortcut.setContext(C.Qt.ShortcutContext.WindowShortcut)
+                shortcut.activated.connect(lambda name=name: self.shortcut(name))
+
+    def shortcut(self, name):
+        if isinstance(W.QApplication.focusWidget(), W.QLineEdit) and name != "stop":
+            return  # typing a path or search must not press collection buttons
+        if name == "stop":
+            if self.worker.running:
+                self.stop()
+        elif self.buttons[name].isEnabled():
+            self.buttons[name].click()
+
+    def recorded_attempt_open(self):
+        return (
+            self.worker.running
+            and self.state.get("mode") == "collection"
+            and int(self.state.get("active_steps") or 0) > 0
+        )
+
+    def allow_abort(self, action):
+        """A paused recording is kept as an aborted attempt; ask before ending it."""
+        if not self.recorded_attempt_open():
+            return True
+        answer = W.QMessageBox.question(
+            self,
+            "End the current attempt?",
+            f"This attempt has {self.state.get('active_steps')} recorded steps. {action} ends it;"
+            " the recording is saved as aborted and cannot be confirmed.",
+            W.QMessageBox.StandardButton.Yes | W.QMessageBox.StandardButton.Cancel,
+            W.QMessageBox.StandardButton.Cancel,
+        )
+        return answer == W.QMessageBox.StandardButton.Yes
 
     def slot(self):
         return next(
@@ -371,7 +487,7 @@ class CollectorWindow(W.QMainWindow):
 
     def refresh(self):
         try:
-            self.data = inspect_pool(self.root)
+            self.data = inspect_pool(self.root, strict=False)
         except Exception as error:
             self.error(error)
             return
@@ -422,7 +538,9 @@ class CollectorWindow(W.QMainWindow):
         self.attempts.clear()
         for index, detail in enumerate(reversed(self.slot()["details"])):
             outcome = (
-                "Error"
+                "Incomplete"
+                if detail.get("incomplete")
+                else "Error"
                 if detail["error"]
                 else "Aborted"
                 if detail["aborted"]
@@ -489,6 +607,9 @@ class CollectorWindow(W.QMainWindow):
             if self.state.get("mode") == "collection" and self.state.get("phase") == "ACTIVE":
                 self.refresh()
                 self.status.setText("Collection is active. Pause or stop before switching tasks.")
+                return
+            if not self.allow_abort("Switching slots"):
+                self.refresh()
                 return
             self.pending = (key, shot, False)
             self.worker.send("abort")
@@ -563,6 +684,8 @@ class CollectorWindow(W.QMainWindow):
         if self.closing or self.review_future or self.frozen:
             return
         if self.worker.running:
+            if not self.allow_abort("New calibration"):
+                return
             self.pending = None
             self.pending_calibration = True
             self.pending_mapping = False
@@ -584,11 +707,14 @@ class CollectorWindow(W.QMainWindow):
 
     def change_view_orientation(self, index):
         self.preview.set_camera_view(index == 0)
+        self.wrist.set_camera_view(index == 0)
         self.args.operator_view = "camera" if index == 0 else "policy"
         self.worker.send("view", value=self.args.operator_view)
 
     def check_joint_mapping(self):
         if self.worker.running:
+            if not self.allow_abort("Joint mapping"):
+                return
             self.worker.send("abort")
             self.pending_mapping = True
             self.pending_calibration = False
@@ -602,6 +728,8 @@ class CollectorWindow(W.QMainWindow):
             self.worker.open(self.key, self.shot, mapping_check=True)
             self.selected_attempt = None
             self.frame_stamp = None
+            self.wrist_stamp = None
+            self.wrist_panel.hide()
             self.status.setText(
                 "Move one joint at a time. Read-only preview: no physics steps or motor writes."
             )
@@ -622,6 +750,8 @@ class CollectorWindow(W.QMainWindow):
                     and self.state.get("mode") in ("alignment", "collection")
                 ):
                     return
+                if not self.allow_abort("Reopening the scene"):
+                    return
                 self.pending = (self.key, self.shot, retry)
                 self.worker.send("abort")
                 return
@@ -629,6 +759,8 @@ class CollectorWindow(W.QMainWindow):
             self.worker.open(self.key, self.shot, retry=retry, previous=self.selected_attempt)
             self.selected_attempt = None
             self.frame_stamp = None
+            self.wrist_stamp = None
+            self.wrist_panel.hide()
             self.phase.setText("Loading initial scene")
             self.view_badge.setText("INITIAL SCENE")
             self.status.setText(
@@ -669,8 +801,10 @@ class CollectorWindow(W.QMainWindow):
     def show_attempt(self, detail):
         self.close_video()
         self.selected_attempt = detail["path"]
+        self.wrist_panel.hide()
         directory = self.root / detail["path"]
-        meta = json.loads((directory / "attempt.json").read_text())
+        header = directory / "attempt.json"
+        meta = json.loads(header.read_text()) if header.is_file() else {"error": detail["error"]}
         self.instruction.setText(meta.get("instruction", "Recorded demonstration"))
         self.view_badge.setText("ATTEMPT REVIEW")
         self.phase.setText(
@@ -685,6 +819,7 @@ class CollectorWindow(W.QMainWindow):
             + (meta.get("error") or "Review the recording before confirming.")
         )
         self.capture = cv2.VideoCapture(str(directory / "operator-view.mp4"))
+        self.decoded_next = None
         if self.capture.isOpened():
             self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
             self.fps = max(1, self.capture.get(cv2.CAP_PROP_FPS))
@@ -705,8 +840,11 @@ class CollectorWindow(W.QMainWindow):
     def video_frame(self, index):
         if self.capture is None:
             return
-        self.capture.set(cv2.CAP_PROP_POS_FRAMES, int(index))
+        # Decode forward when possible; seeking every frame re-decodes a whole GOP.
+        if index != self.decoded_next:
+            self.capture.set(cv2.CAP_PROP_POS_FRAMES, int(index))
         okay, bgr = self.capture.read()
+        self.decoded_next = int(index) + 1 if okay else None
         if okay:
             rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
             height, width = rgb.shape[:2]
@@ -777,9 +915,7 @@ class CollectorWindow(W.QMainWindow):
                     }.get(phase, phase)
                     self.phase.setText(title)
                     self.view_badge.setText("RECORDING" if phase == "ACTIVE" else "LIVE PREVIEW")
-                    self.detail.setText(
-                        self.state.get("preview_error") or self.state.get("notice", "")
-                    )
+                    self.detail.setText(collection_summary(self.state))
                     if self.state.get("instruction"):
                         self.instruction.setText(self.state["instruction"])
                     if self.state.get("mode") == "mapping_check":
@@ -792,6 +928,11 @@ class CollectorWindow(W.QMainWindow):
                     if image.exists() and image.stat().st_mtime_ns != self.frame_stamp:
                         self.frame_stamp = image.stat().st_mtime_ns
                         self.preview.show_image(G.QImage.fromData(image.read_bytes()))
+                    wrist = self.worker.control / "wrist.jpg"
+                    if wrist.exists() and wrist.stat().st_mtime_ns != self.wrist_stamp:
+                        self.wrist_stamp = wrist.stat().st_mtime_ns
+                        self.wrist.show_image(G.QImage.fromData(wrist.read_bytes()))
+                        self.wrist_panel.show()
                 else:
                     result = self.worker.finish()
                     self.refresh()

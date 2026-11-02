@@ -163,7 +163,8 @@ def confirm_attempt(root, relative):
         if not review_required(root):
             raise ValueError("operator review policy is required")
         # This also rejects foreign/misfiled task/shot/init metadata.
-        status = inspect_pool(root)
+        # An interrupted save elsewhere must not block reviewing this slot.
+        status = inspect_pool(root, strict=False)
         relative = str(directory.relative_to(root))
         if not any(relative in slot["attempts"] for slot in status["cases"]):
             raise ValueError("unregistered attempt")

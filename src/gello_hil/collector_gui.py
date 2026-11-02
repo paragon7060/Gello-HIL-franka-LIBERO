@@ -34,7 +34,8 @@ def button_permissions(state, *, writable, running, candidate_success=False, fro
         and (
             mode == "collection" and phase == "ACTIVE" or mode == "alignment" and phase != "PAUSED"
         ),
-        "retry": writable and not frozen,
+        # Retry reopens the scene, so it must never abort a running attempt.
+        "retry": writable and not running and not frozen,
         "confirm": not running and candidate_success and not frozen,
     }
 
@@ -128,7 +129,7 @@ class SceneWorker:
                 "--window-scale",
                 "3",
                 "--max-active-steps",
-                str(self.args.max_active_steps),
+                str(self.step_budget(key)),
                 "--gui-operator-view",
                 getattr(self.args, "operator_view", "camera"),
             ]
@@ -150,6 +151,12 @@ class SceneWorker:
         except BaseException:
             self.release()
             raise
+
+    def step_budget(self, key):
+        """LIBERO-10 long-horizon tasks get their own active-step budget."""
+        if key.startswith("long_"):
+            return getattr(self.args, "long_max_active_steps", None) or self.args.max_active_steps
+        return self.args.max_active_steps
 
     def send(self, command, **fields):
         if not self.running:
@@ -223,6 +230,12 @@ def add_gui_command(sub):
     )
     parser.add_argument("--libero-config-path", default="runs/position40-assets/config")
     parser.add_argument("--max-active-steps", type=int, default=1000)
+    parser.add_argument(
+        "--long-max-active-steps",
+        type=int,
+        default=1500,
+        help="active-step budget for the long_* (LIBERO-10) tasks",
+    )
     parser.add_argument(
         "--apply",
         action="store_true",

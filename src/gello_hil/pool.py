@@ -76,8 +76,38 @@ def init_pool(root, plan_path=DEFAULT_PLAN):
     return plan
 
 
-def inspect_pool(root):
-    """Read metadata only; full raw validation happens when freezing the pool."""
+_HEADERS = {}
+
+
+def _attempt_header(header):
+    """Small attempt.json summary, parsed again only after the file changes."""
+    stat = header.stat()
+    version = (stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+    cached = _HEADERS.get(str(header))
+    if cached and cached[0] == version:
+        return cached[1]
+    meta = json.loads(header.read_text())
+    summary = {
+        "position_case": meta.get("position_case") or {},
+        "motor_assistance_requested": meta.get("motor_assistance_requested"),
+        "success": meta.get("success"),
+        "aborted": meta.get("aborted"),
+        "error": meta.get("error"),
+        "instruction": meta.get("instruction", ""),
+        "steps": meta.get("session", {}).get("active_step_count", len(meta.get("diagnostics", []))),
+        "created_at_utc": meta.get("created_at_utc"),
+        "sha256": None,
+    }
+    _HEADERS[str(header)] = (version, summary)
+    return summary
+
+
+def inspect_pool(root, *, strict=True):
+    """Read metadata only; full raw validation happens when freezing the pool.
+
+    strict=False lists attempt folders without attempt.json (an interrupted save)
+    as incomplete instead of stopping, so review can continue around them.
+    """
     root = Path(root)
     plan_path = root / "pool-plan.json"
     plan = load_plan(plan_path)
@@ -97,9 +127,13 @@ def inspect_pool(root):
                 header = directory / "attempt.json"
                 if not header.is_file():
                     unresolved.append(str(directory.relative_to(root)))
+                    details.append({"path": unresolved[-1], "success": False, "aborted": False,
+                                    "error": "Incomplete attempt: attempt.json is missing",
+                                    "confirmed": False, "incomplete": True, "instruction": "",
+                                    "steps": 0, "created_at_utc": directory.name})
                     continue
-                meta = json.loads(header.read_text())
-                actual = meta.get("position_case") or {}
+                meta = _attempt_header(header)
+                actual = meta["position_case"]
                 if any(
                     actual.get(k) != case[k]
                     for k in (
@@ -127,22 +161,24 @@ def inspect_pool(root):
                 selected = successful and (not manual or (
                     confirmation is not None and confirmation["attempt"] == relative))
                 if selected:
-                    if manual and confirmation["sha256"].get("attempt.json") != sha256(header):
+                    if meta["sha256"] is None:
+                        meta["sha256"] = sha256(header)
+                    if manual and confirmation["sha256"].get("attempt.json") != meta["sha256"]:
                         raise ValueError("confirmed attempt metadata changed")
                     accepted.append(relative)
                 failed_count += not successful
                 details.append({"path": relative, "success": bool(successful),
                                 "aborted": bool(meta.get("aborted")), "error": meta.get("error"),
-                                "confirmed": bool(selected), "instruction": meta.get("instruction", ""),
-                                "steps": meta.get("session", {}).get("active_step_count", len(meta.get("diagnostics", []))),
-                                "created_at_utc": meta.get("created_at_utc", directory.name)})
+                                "confirmed": bool(selected), "instruction": meta["instruction"],
+                                "steps": meta["steps"],
+                                "created_at_utc": meta.get("created_at_utc") or directory.name})
             if manual and confirmation and confirmation["attempt"] not in attempts:
                 raise ValueError("confirmed attempt is missing")
             if len(accepted) > 1:
                 raise ValueError(
                     f"duplicate successful support slot: {case['key']} shot{shot}"
                 )
-            if unresolved:
+            if unresolved and strict:
                 raise ValueError(
                     f"unresolved attempt ownership/artifacts: {unresolved}"
                 )

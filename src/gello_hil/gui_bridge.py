@@ -42,24 +42,33 @@ class FileDisplay:
         self.last_button = None
         self.last_publish = 0.0
         self.initial_operator_view = operator_view
+        # The GUI owns this worker; if it dies the worker must release, not idle.
+        self.parent_pid = os.getppid()
+        self.parent_lost = False
 
     def set_state(self, **fields):
         self.state.update(json_safe(fields))
 
-    def publish(self, frame=None, *, force=False):
+    def _write_image(self, name, frame):
+        frame = np.asarray(frame, dtype=np.uint8)
+        if frame.shape[1] > 900:
+            frame = cv2.resize(frame, (900, round(frame.shape[0] * 900 / frame.shape[1])))
+        okay, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
+        if not okay:
+            raise OSError("live preview encoding failed")
+        temp = self.root / f"{name}.tmp"
+        temp.write_bytes(encoded.tobytes())
+        os.replace(temp, self.root / f"{name}.jpg")
+
+    def publish(self, frame=None, *, wrist=None, force=False):
+        """Publish BGR operator frames; wrist is the eye-in-hand camera in RGB."""
         if not force and time.monotonic() - self.last_publish < 0.10:
             return
         self.last_publish = time.monotonic()
         if frame is not None:
-            frame = np.asarray(frame, dtype=np.uint8)
-            if frame.shape[1] > 900:
-                frame = cv2.resize(frame, (900, round(frame.shape[0] * 900 / frame.shape[1])))
-            okay, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
-            if not okay:
-                raise OSError("live preview encoding failed")
-            temp = self.root / "frame.tmp"
-            temp.write_bytes(encoded.tobytes())
-            os.replace(temp, self.root / "frame.jpg")
+            self._write_image("frame", frame)
+        if wrist is not None:
+            self._write_image("wrist", cv2.cvtColor(np.asarray(wrist, dtype=np.uint8), cv2.COLOR_RGB2BGR))
         atomic_json(
             self.root / "state.json",
             {
@@ -89,6 +98,13 @@ class FileDisplay:
 
     def waitKey(self, milliseconds=10):
         if (self.root / "abort.json").exists():
+            return ord("q")
+        if os.getppid() != self.parent_pid:
+            if not self.parent_lost:
+                self.parent_lost = True
+                self.events.append({"command": "abort", "accepted": True,
+                                    "operator_source": "gui_process_lost",
+                                    "mode": self.state.get("mode"), "phase": self.state.get("phase")})
             return ord("q")
         commands = sorted((self.root / "commands").glob("*.json"))
         for path in commands:
@@ -145,7 +161,7 @@ class FileDisplay:
 def preview_scene(args):
     """Initial scene without serial, or explicit read-only joint mapping preview."""
     from .position import make_position_env
-    from .libero_runtime import rgb_frame, render_joint_pose
+    from .libero_runtime import rgb_frame, render_joint_pose, wrist_frame
     from .calibration import GelloCalibration
     from .cli import _bus
 
@@ -164,7 +180,8 @@ def preview_scene(args):
             instruction=instruction,
             notice="Initial scene. Choose a calibration to enable alignment and collection.",
         )
-        display.publish(cv2.cvtColor(rgb_frame(observation), cv2.COLOR_RGB2BGR), force=True)
+        display.publish(cv2.cvtColor(rgb_frame(observation), cv2.COLOR_RGB2BGR),
+                        wrist=wrist_frame(observation), force=True)
         if getattr(args, "gui_mapping_check", False):
             calibration = GelloCalibration.from_json(Path(args.calibration))
             bus = _bus(args)
