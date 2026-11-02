@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import cv2
 import numpy as np
+from .ui import wrap_pixels
 from . import assist_ui as passive
 from .calibration import GelloCalibration
 from .dynamixel import COUNTS_PER_REVOLUTION, ReadOnlyDynamixelBus
@@ -98,7 +99,7 @@ def draw_alignment_panel(
 ) -> np.ndarray:
     scale = 3
     camera = cv2.resize(
-        frame,
+        cv2.cvtColor(frame, cv2.COLOR_RGB2BGR),
         (int(frame.shape[1]) * scale, int(frame.shape[0]) * scale),
         interpolation=cv2.INTER_NEAREST,
     )
@@ -116,6 +117,8 @@ def draw_alignment_panel(
         (
             "ENTER: START PASSIVE HITL NOW (torque stays off; no settle)"
             if passive_start_ready and status in ("PAUSED", "ARMING SETTLE")
+            else "ENTER: START control + 2s force fade at READY"
+            if limits.profile == "GELLO-ALIGN-A6" and status == "ALIGNMENT READY"
             else "ENTER: settle+assist / release at READY"
         ),
         "SPACE: torque-off clutch | q: abort",
@@ -165,21 +168,28 @@ def draw_alignment_panel(
         )
     elif preview_error:
         lines.extend(["", f"TARGET ERROR PREVIEW UNAVAILABLE: {preview_error}"])
+    styled = []
+    for i, line in enumerate(lines):
+        size, thickness = (.72 if i < 3 else .58), (2 if i in (0, 4) else 1)
+        for part in wrap_pixels(line, 740, font_scale=size, thickness=thickness):
+            styled.append((part, size, thickness, color if i == 4 else (235, 235, 235),
+                           38 if i < 3 else 25))
+    height = max(camera.shape[0], 44 + sum(item[4] for item in styled) + 10)
+    camera = np.pad(camera, ((0, height-camera.shape[0]), (0, 0), (0, 0)))
+    panel = np.zeros((height, 780, 3), dtype=np.uint8)
     y = 44
-    for index, line in enumerate(lines):
-        font_scale = 0.72 if index < 3 else 0.58
-        thickness = 2 if index in (0, 4) else 1
+    for line, font_scale, thickness, line_color, line_height in styled:
         cv2.putText(
             panel,
             line,
             (18, y),
             cv2.FONT_HERSHEY_SIMPLEX,
             font_scale,
-            color if index == 4 else (235, 235, 235),
+            line_color,
             thickness,
             cv2.LINE_AA,
         )
-        y += 38 if index < 3 else 25
+        y += line_height
     return np.hstack((camera, panel))
 
 class AlignmentRunner:
@@ -469,7 +479,11 @@ class AlignmentRunner:
                 )
                 cv2.imshow(window, display)
                 key = int(cv2.waitKey(10)) & 0xFF
-                if key in (ord("q"), ord("Q")):
+                try:
+                    closed = cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1
+                except cv2.error:
+                    closed = True
+                if closed or key in (ord("q"), ord("Q"), 27):
                     aborted = True
                     stop_collection = True
                     notice = "ABORTED"

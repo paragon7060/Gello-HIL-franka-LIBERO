@@ -107,6 +107,15 @@ class GelloCalibration:
             raise ValueError("all motor IDs must be unique")
         if any(sign not in (-1, 1) for sign in self.joint_signs):
             raise ValueError("joint signs must be -1 or +1")
+        if any(not isinstance(i, (int, np.integer)) or not 0 <= i <= 252
+               for i in self.arm_ids + (self.gripper_id,)):
+            raise ValueError("motor IDs must be integers in 0..252")
+        ranges = np.asarray(self.joint_limits, dtype=float)
+        if (ranges.shape != (7, 2) or not np.isfinite(ranges).all()
+                or np.any(ranges[:, 1] <= ranges[:, 0])
+                or not np.isfinite(self.reference_pose).all()
+                or not np.isfinite(self.assembly_offsets_radians).all()):
+            raise ValueError("calibration ranges, offsets and reference must be finite")
         counts = self.calibration_counts + (self.gripper_open_count, self.gripper_closed_count)
         if any(count < 0 or count >= COUNTS_PER_REVOLUTION for count in counts):
             raise ValueError("calibration counts must be in [0, 4095]")
@@ -209,4 +218,24 @@ class GelloCalibration:
             gripper_closed_count=payload["gripper_closed_count"],
         )
         result.validate()
+        return result
+
+    @classmethod
+    def from_session_json(cls, path: Path) -> GelloCalibration:
+        """Explicit import of the user's historical D31 capture, never a new calibration."""
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("schema_version") != "d31-gello-session-discrete-assembly-offset-calibration-v15":
+            raise ValueError("unsupported historical session calibration")
+        result = cls.create(
+            arm_ids=payload["arm_ids"], gripper_id=payload["gripper_id"],
+            calibration_counts=payload["calibration_counts"],
+            joint_signs=payload["joint_signs"],
+            reference_pose=payload["calibration_pose_joint_positions"],
+            joint_limits=payload["joint_position_limits"],
+            gripper_open_count=payload["gripper_open_count"],
+            gripper_closed_count=payload["gripper_closed_count"],
+        )
+        if not np.allclose(result.assembly_offsets_radians,
+                           payload["assembly_offsets_radians"], atol=1e-9, rtol=0):
+            raise ValueError("historical capture and offsets disagree")
         return result

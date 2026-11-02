@@ -7,7 +7,8 @@ import os
 import numpy as np
 
 
-def make_env(suite_name: str, task_id: int, state_index: int, *, resolution: int, seed: int):
+def make_env(suite_name: str, task_id: int, state_index: int, *, resolution: int, seed: int,
+             controller="JOINT_POSITION", horizon=1000):
     from libero.libero import benchmark, get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
 
@@ -22,16 +23,20 @@ def make_env(suite_name: str, task_id: int, state_index: int, *, resolution: int
     bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
     env = OffScreenRenderEnv(
         bddl_file_name=bddl,
-        controller="JOINT_POSITION",
+        controller=controller,
         camera_heights=int(resolution),
         camera_widths=int(resolution),
-        horizon=1000,
+        horizon=horizon,
         ignore_done=True,
     )
-    env.seed(int(seed))
-    env.reset()
-    obs = env.set_init_state(initial_states[int(state_index)])
-    return env, obs, str(task.language)
+    try:
+        env.seed(int(seed))
+        env.reset()
+        obs = env.set_init_state(initial_states[int(state_index)])
+        return env, obs, str(task.language)
+    except BaseException:
+        env.close()
+        raise
 
 
 def follower_joints(env) -> np.ndarray:

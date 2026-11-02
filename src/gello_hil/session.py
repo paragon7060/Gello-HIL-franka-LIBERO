@@ -75,6 +75,7 @@ class OperatorSession:
     def resume(self, *, anchor_counts, follower_joints, leader_joints, mode: str) -> dict:
         if self.terminal or self.active:
             raise RuntimeError("session cannot resume from its current state")
+        anchor = self._anchor(anchor_counts, follower_joints, leader_joints)
         now = float(self._clock())
         pause_duration = max(0.0, now - self._pause_started_at)
         self._paused_total += pause_duration
@@ -91,7 +92,7 @@ class OperatorSession:
             now=now,
             pause_duration_seconds=float(pause_duration),
             mapping_mode=str(mode),
-            **self._anchor(anchor_counts, follower_joints, leader_joints),
+            **anchor,
         )
 
     def pause(self, **payload) -> dict:
@@ -155,6 +156,6 @@ def decode_key(key: int) -> str | None:
         return "resume"
     if key == ord(" "):
         return "pause"
-    if key == ord("q"):
+    if key in (ord("q"), ord("Q"), 27):
         return "abort"
     return None

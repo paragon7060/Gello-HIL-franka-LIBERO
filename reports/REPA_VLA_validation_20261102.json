@@ -1,0 +1,137 @@
+{
+  "date_kst": "2026-11-02",
+  "branch": "REPA-VLA",
+  "base_commit": "26be20212ff0709668b776ebefabe7da1809aa73",
+  "tests": {
+    "tests": 83,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "python": "conda:openvla-oft (Python 3.10)",
+  "physical_read_only": {
+    "encoder_samples": 20,
+    "GUI_encoder_samples": 10,
+    "all_eight_torque_off_readback": true,
+    "motor_register_writes": 0,
+    "arm_models": [
+      1200,
+      1200,
+      1200,
+      1200,
+      1200,
+      1200,
+      1200
+    ],
+    "gripper_model": 1190
+  },
+  "gui": {
+    "synthetic_camera": true,
+    "motor_register_writes": 0,
+    "simulator_steps": 0,
+    "panels": {
+      "collection_low_resolution": {
+        "shape": [
+          640,
+          748,
+          3
+        ],
+        "display_tested": true,
+        "window_visible": true,
+        "closed_window_aborts": true
+      },
+      "collection_live_release": {
+        "shape": [
+          672,
+          1260,
+          3
+        ],
+        "display_tested": true,
+        "window_visible": true,
+        "closed_window_aborts": true
+      },
+      "alignment_ready": {
+        "shape": [
+          769,
+          1548,
+          3
+        ],
+        "display_tested": true,
+        "window_visible": true,
+        "closed_window_aborts": true
+      }
+    }
+  },
+  "physical_motor_assist_executed": false,
+  "physical_calibration_repeated": false,
+  "real_position_demonstrations_collected": 0,
+  "old_experiments_changed": false,
+  "old_heartbeat_resumed": false,
+  "source_files_sha256": {
+    "src/gello_hil/__init__.py": "eb90feb2454c9210f79ac0919f3ba3a892949eb224046528df00ff6d42e3a27a",
+    "src/gello_hil/actuation.py": "18e087941f76019e7f8176038e4fe5e60c8f478ecb6ee892b3ba099dd6dd37c4",
+    "src/gello_hil/alignment.py": "a1f13316e9d7de3f3e5892caa17024653cc6905d48fdb8e81ae5c38fe779cb15",
+    "src/gello_hil/assist_ui.py": "e50ec76705679248340494d74e1d5d1642f36cbad53f410bcd49a185752bf82c",
+    "src/gello_hil/assisted.py": "ca13d6a7e363a7c029f4f026656d4fe08b1e4e7e727e65a36149da5c580cb8cb",
+    "src/gello_hil/calibration.py": "27e1e434e3aa6a4245702dc0de61d8ec5c7719af5fe4545c32754bdf7a5f6bf9",
+    "src/gello_hil/cli.py": "459f9ea3297bee795a813dcedc3f94908dd3449fa587b87b15b0203870030526",
+    "src/gello_hil/control.py": "d5457a0e9b7a6b32c79ff5c0c87818c1012e6d6b82aa6b465ad41cfe649f3760",
+    "src/gello_hil/dynamixel.py": "c878982dd1cc910c28bb399f6b28d60a2ae58bbbf78593a0e25471d656574bf5",
+    "src/gello_hil/exports.py": "7f3fc2441c104bd999f74cf75dda1f79a49c67acd22b547ab32864a204a93d9d",
+    "src/gello_hil/handoff.py": "e88532b165c4bc807c24f10937616519715150cb182453879a8f4427939af55b",
+    "src/gello_hil/input_monitor.py": "400b7e8c0a4d0482f530ae3d657a7513e2c9fd3f7459b3f035faafb749e8dda7",
+    "src/gello_hil/libero_runtime.py": "b080390df297d210cfaf95636dd68dab7bd201dc24d37ed8a4119cdb64ba206d",
+    "src/gello_hil/live_handoff.py": "8ae9a4611735f42aa8977a5a2b09e5dace13b0760670cb5f2c3389cf96391f51",
+    "src/gello_hil/plans/libero_pro_position12.json": "04d32fcbcd4bca1bac848d5b68aa00ed53a31779d69dcf44c7b69838462be2c3",
+    "src/gello_hil/plans/libero_pro_position40_pool10.json": "1a93def3e3de5b1dc7659cf25244abf59e6c258d4936507fba0a5187bc135869",
+    "src/gello_hil/pool.py": "9d2558d45998f3c9b509c77ea5040069891bcd342bc47400db5267a451df4178",
+    "src/gello_hil/pose_control.py": "cf0fc4cba0d9568d92116e468e8bb4c200bb4b9175e9b35a844256fa65a53b24",
+    "src/gello_hil/position.py": "4911f3c7af84298d55d46dd1176079c9733f255e533eff77d6aef4ea2c36851e",
+    "src/gello_hil/recording.py": "115e91fe730198d3e363af8629ebf50286e24a742e9531d23618f860e3ea399a",
+    "src/gello_hil/session.py": "6608ba803775cdcddc4556b4c220e96351908b1d9bcd251ad1be02a27a7237b8",
+    "src/gello_hil/ui.py": "e2e32274aa7ba44aa1ff7ee16c50d1e00ee5d7e0bfb9fc79bfd1df9b7e01f644"
+  },
+  "evidence": {
+    "encoder": "runs/device_check_20261102/input.json",
+    "encoder_gui": "runs/device_check_20261102/gui-input.json",
+    "GUI": "runs/gui_validation_20261102_v2/validation.json",
+    "pytest": "runs/final_validation_20261102/pytest.xml",
+    "official_assets": "runs/position40-assets/download-ledger.json",
+    "official_catalog": "runs/position40-assets/catalog-validation.json",
+    "native_scene": "runs/position40-scene-smoke/validation.json"
+  },
+  "position40_pool": {
+    "target_successful_episodes": 400,
+    "collected_successful_episodes": 0,
+    "tasks": 40,
+    "shots_per_task": 10,
+    "native_support_init_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "official_asset_files": 80,
+    "native_states_per_task": 50,
+    "catalog_validation_passed": true,
+    "frozen_pool_created": false,
+    "selection_manifests_created": false,
+    "synthetic_full_pool_tests_passed": true,
+    "software_scene_smoke": {
+      "task": "object_07",
+      "state_index": 0,
+      "support_warmup_steps": 10,
+      "collection_actions": 0,
+      "motor_register_writes": 0,
+      "software_rendering_forced": true,
+      "passed": true,
+      "image_visually_inspected": true
+    }
+  }
+}

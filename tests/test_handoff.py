@@ -210,7 +210,7 @@ def test_runner_owns_powered_handoff_cleanup_and_shared_window(monkeypatch, canc
     monkeypatch.setattr(MODULE.cv2, "resizeWindow", lambda *args: None)
     monkeypatch.setattr(MODULE.cv2, "imshow", lambda name, display: displays.append(name))
     monkeypatch.setattr(MODULE.cv2, "waitKey", key)
-    monkeypatch.setattr(MODULE.cv2, "getWindowProperty", lambda *args: 0 if cancel == "closed_window" else 1)
+    monkeypatch.setattr(MODULE.cv2, "getWindowProperty", lambda *args: 0 if cancel == "closed_window" and current["phase"].startswith("POWERED HOLD") else 1)
     monkeypatch.setattr(MODULE.passive, "close_operator_window", lambda name: window_closes.append(name))
     sim_state = np.arange(9, dtype=np.float64)
     env = SimpleNamespace(get_sim_state=lambda: sim_state.copy())  # no step method

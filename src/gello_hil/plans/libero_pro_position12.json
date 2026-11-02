@@ -1,0 +1,133 @@
+{
+  "schema_version": "gello-position-support-v1",
+  "expected_benchmark_commit": "eafdb809426b13153aa1e4c42d6601844217dfec",
+  "tasks": [
+    {
+      "key": "object_soup",
+      "suite": "libero_object_swap",
+      "task_id": 0,
+      "task_name": "pick_up_the_alphabet_soup_and_place_it_in_the_basket",
+      "target": "alphabet_soup_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_cream_cheese",
+      "suite": "libero_object_swap",
+      "task_id": 1,
+      "task_name": "pick_up_the_cream_cheese_and_place_it_in_the_basket",
+      "target": "cream_cheese_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_dressing",
+      "suite": "libero_object_swap",
+      "task_id": 2,
+      "task_name": "pick_up_the_salad_dressing_and_place_it_in_the_basket",
+      "target": "salad_dressing_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_bbq_sauce",
+      "suite": "libero_object_swap",
+      "task_id": 3,
+      "task_name": "pick_up_the_bbq_sauce_and_place_it_in_the_basket",
+      "target": "bbq_sauce_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_ketchup",
+      "suite": "libero_object_swap",
+      "task_id": 4,
+      "task_name": "pick_up_the_ketchup_and_place_it_in_the_basket",
+      "target": "ketchup_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_tomato_sauce",
+      "suite": "libero_object_swap",
+      "task_id": 5,
+      "task_name": "pick_up_the_tomato_sauce_and_place_it_in_the_basket",
+      "target": "tomato_sauce_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_butter",
+      "suite": "libero_object_swap",
+      "task_id": 6,
+      "task_name": "pick_up_the_butter_and_place_it_in_the_basket",
+      "target": "butter_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_milk",
+      "suite": "libero_object_swap",
+      "task_id": 7,
+      "task_name": "pick_up_the_milk_and_place_it_in_the_basket",
+      "target": "milk_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_chocolate_pudding",
+      "suite": "libero_object_swap",
+      "task_id": 8,
+      "task_name": "pick_up_the_chocolate_pudding_and_place_it_in_the_basket",
+      "target": "chocolate_pudding_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "object_orange_juice",
+      "suite": "libero_object_swap",
+      "task_id": 9,
+      "task_name": "pick_up_the_orange_juice_and_place_it_in_the_basket",
+      "target": "orange_juice_1",
+      "destination": "basket_1",
+      "grasp_family": "rigid_object"
+    },
+    {
+      "key": "goal_bowl",
+      "suite": "libero_goal_swap",
+      "task_id": 1,
+      "task_name": "put_the_bowl_on_the_stove",
+      "target": "akita_black_bowl_1",
+      "destination": "flat_stove_1",
+      "grasp_family": "bowl_rim"
+    },
+    {
+      "key": "goal_bowl_plate",
+      "suite": "libero_goal_swap",
+      "task_id": 8,
+      "task_name": "put_the_bowl_on_the_plate",
+      "target": "akita_black_bowl_1",
+      "destination": "plate_1",
+      "grasp_family": "bowl_rim"
+    }
+  ],
+  "support_init_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+  ],
+  "collection_method": "human_gello",
+  "previous_scripted_expert_runs_unchanged": true
+}

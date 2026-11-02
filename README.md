@@ -4,6 +4,10 @@ Human-in-the-loop joint teleoperation for a Franka Panda in
 [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO), using a passive
 [GELLO](https://github.com/wuphilipp/gello_software) as the leader device.
 
+**REPA-VLA integration branch:** [LIBERO-Pro Position collection and shared data export](docs/repa-vla-position.ko.md).
+This branch adds finite read-only input monitoring, explicit historical calibration import,
+native 7D OSC support collection and observation recording. Original motor limits remain unchanged.
+
 [한국어 사용법](docs/usage.ko.md) · [Safety](SAFETY.md) ·
 [Architecture](docs/architecture.md) · [Attribution](THIRD_PARTY_NOTICES.md)
 
@@ -11,10 +15,17 @@ Human-in-the-loop joint teleoperation for a Franka Panda in
 > **experimental, opt-in** `assisted-collect --apply` command that can move real
 > GELLO arm motors during setup. Read [the assisted guide](docs/assisted.md) and
 > [SAFETY.md](SAFETY.md) first. The current A6 live-release revision is
-> **unvalidated: further tests and physical execution were explicitly deferred**.
-> Older A5 tests do not certify A6. Autonomous homing/private failure states are excluded.
+> **not yet validated on physical hardware**.
+> REPA-VLA adds A6 simulated transport and GUI regression checks, including force
+> fade, clutch, failure cleanup and single bus ownership. Physical A6 validation
+> remains outstanding. Autonomous homing/private failure states are excluded.
 
 ## Start here
+
+**REPA-VLA / 한국어:** [Position 전체 40과제 × 10-demo 수집과 1·3·5·10-shot 선택](docs/position40-pool10.ko.md).
+The guide covers shared input/calibration, interactive A6 collection, resume,
+immutable raw datasets, and reproducible nested subsets. No physical A6 success
+or completed 400-demo collection is claimed.
 
 First use: **install → probe → calibrate → mapping check → collect**.
 Later sessions: probe again, preferably capture fresh calibration, check mapping

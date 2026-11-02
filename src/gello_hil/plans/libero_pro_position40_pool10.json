@@ -1,0 +1,306 @@
+{
+  "schema_version": "gello-position-pool-v2",
+  "expected_benchmark_commit": "eafdb809426b13153aa1e4c42d6601844217dfec",
+  "catalog_source": "libero/libero/benchmark/libero_suite_task_map.py",
+  "catalog_source_sha256": "0feec8499da91e25a134273b6624ffa7adb9c6dc7da23f8cb5e3cd8998d1c80f",
+  "collection_method": "human_gello",
+  "motor_assistance_required": true,
+  "shots_per_task": 10,
+  "support_init_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "excluded_init_indices": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49
+  ],
+  "evaluation_protocol": "separate_manifest_required",
+  "tasks": [
+    {
+      "key": "spatial_00",
+      "suite": "libero_spatial_swap",
+      "task_id": 0,
+      "task_name": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_01",
+      "suite": "libero_spatial_swap",
+      "task_id": 1,
+      "task_name": "pick_up_the_black_bowl_next_to_the_ramekin_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_02",
+      "suite": "libero_spatial_swap",
+      "task_id": 2,
+      "task_name": "pick_up_the_black_bowl_from_table_center_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_03",
+      "suite": "libero_spatial_swap",
+      "task_id": 3,
+      "task_name": "pick_up_the_black_bowl_on_the_cookie_box_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_04",
+      "suite": "libero_spatial_swap",
+      "task_id": 4,
+      "task_name": "pick_up_the_black_bowl_in_the_top_drawer_of_the_wooden_cabinet_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_05",
+      "suite": "libero_spatial_swap",
+      "task_id": 5,
+      "task_name": "pick_up_the_black_bowl_on_the_ramekin_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_06",
+      "suite": "libero_spatial_swap",
+      "task_id": 6,
+      "task_name": "pick_up_the_black_bowl_next_to_the_cookie_box_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_07",
+      "suite": "libero_spatial_swap",
+      "task_id": 7,
+      "task_name": "pick_up_the_black_bowl_on_the_stove_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_08",
+      "suite": "libero_spatial_swap",
+      "task_id": 8,
+      "task_name": "pick_up_the_black_bowl_next_to_the_plate_and_place_it_on_the_plate"
+    },
+    {
+      "key": "spatial_09",
+      "suite": "libero_spatial_swap",
+      "task_id": 9,
+      "task_name": "pick_up_the_black_bowl_on_the_wooden_cabinet_and_place_it_on_the_plate"
+    },
+    {
+      "key": "object_00",
+      "suite": "libero_object_swap",
+      "task_id": 0,
+      "task_name": "pick_up_the_alphabet_soup_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_01",
+      "suite": "libero_object_swap",
+      "task_id": 1,
+      "task_name": "pick_up_the_cream_cheese_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_02",
+      "suite": "libero_object_swap",
+      "task_id": 2,
+      "task_name": "pick_up_the_salad_dressing_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_03",
+      "suite": "libero_object_swap",
+      "task_id": 3,
+      "task_name": "pick_up_the_bbq_sauce_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_04",
+      "suite": "libero_object_swap",
+      "task_id": 4,
+      "task_name": "pick_up_the_ketchup_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_05",
+      "suite": "libero_object_swap",
+      "task_id": 5,
+      "task_name": "pick_up_the_tomato_sauce_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_06",
+      "suite": "libero_object_swap",
+      "task_id": 6,
+      "task_name": "pick_up_the_butter_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_07",
+      "suite": "libero_object_swap",
+      "task_id": 7,
+      "task_name": "pick_up_the_milk_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_08",
+      "suite": "libero_object_swap",
+      "task_id": 8,
+      "task_name": "pick_up_the_chocolate_pudding_and_place_it_in_the_basket"
+    },
+    {
+      "key": "object_09",
+      "suite": "libero_object_swap",
+      "task_id": 9,
+      "task_name": "pick_up_the_orange_juice_and_place_it_in_the_basket"
+    },
+    {
+      "key": "goal_00",
+      "suite": "libero_goal_swap",
+      "task_id": 0,
+      "task_name": "open_the_middle_drawer_of_the_cabinet"
+    },
+    {
+      "key": "goal_01",
+      "suite": "libero_goal_swap",
+      "task_id": 1,
+      "task_name": "put_the_bowl_on_the_stove"
+    },
+    {
+      "key": "goal_02",
+      "suite": "libero_goal_swap",
+      "task_id": 2,
+      "task_name": "put_the_wine_bottle_on_top_of_the_cabinet"
+    },
+    {
+      "key": "goal_03",
+      "suite": "libero_goal_swap",
+      "task_id": 3,
+      "task_name": "open_the_top_drawer_and_put_the_bowl_inside"
+    },
+    {
+      "key": "goal_04",
+      "suite": "libero_goal_swap",
+      "task_id": 4,
+      "task_name": "put_the_bowl_on_top_of_the_cabinet"
+    },
+    {
+      "key": "goal_05",
+      "suite": "libero_goal_swap",
+      "task_id": 5,
+      "task_name": "push_the_plate_to_the_front_of_the_stove"
+    },
+    {
+      "key": "goal_06",
+      "suite": "libero_goal_swap",
+      "task_id": 6,
+      "task_name": "put_the_cream_cheese_in_the_bowl"
+    },
+    {
+      "key": "goal_07",
+      "suite": "libero_goal_swap",
+      "task_id": 7,
+      "task_name": "turn_on_the_stove"
+    },
+    {
+      "key": "goal_08",
+      "suite": "libero_goal_swap",
+      "task_id": 8,
+      "task_name": "put_the_bowl_on_the_plate"
+    },
+    {
+      "key": "goal_09",
+      "suite": "libero_goal_swap",
+      "task_id": 9,
+      "task_name": "put_the_wine_bottle_on_the_rack"
+    },
+    {
+      "key": "long_00",
+      "suite": "libero_10_swap",
+      "task_id": 0,
+      "task_name": "LIVING_ROOM_SCENE2_put_both_the_alphabet_soup_and_the_tomato_sauce_in_the_basket"
+    },
+    {
+      "key": "long_01",
+      "suite": "libero_10_swap",
+      "task_id": 1,
+      "task_name": "LIVING_ROOM_SCENE2_put_both_the_cream_cheese_box_and_the_butter_in_the_basket"
+    },
+    {
+      "key": "long_02",
+      "suite": "libero_10_swap",
+      "task_id": 2,
+      "task_name": "KITCHEN_SCENE3_turn_on_the_stove_and_put_the_moka_pot_on_it"
+    },
+    {
+      "key": "long_03",
+      "suite": "libero_10_swap",
+      "task_id": 3,
+      "task_name": "KITCHEN_SCENE4_put_the_black_bowl_in_the_bottom_drawer_of_the_cabinet_and_close_it"
+    },
+    {
+      "key": "long_04",
+      "suite": "libero_10_swap",
+      "task_id": 4,
+      "task_name": "LIVING_ROOM_SCENE5_put_the_white_mug_on_the_left_plate_and_put_the_yellow_and_white_mug_on_the_right_plate"
+    },
+    {
+      "key": "long_05",
+      "suite": "libero_10_swap",
+      "task_id": 5,
+      "task_name": "STUDY_SCENE1_pick_up_the_book_and_place_it_in_the_back_compartment_of_the_caddy"
+    },
+    {
+      "key": "long_06",
+      "suite": "libero_10_swap",
+      "task_id": 6,
+      "task_name": "LIVING_ROOM_SCENE6_put_the_white_mug_on_the_plate_and_put_the_chocolate_pudding_to_the_right_of_the_plate"
+    },
+    {
+      "key": "long_07",
+      "suite": "libero_10_swap",
+      "task_id": 7,
+      "task_name": "LIVING_ROOM_SCENE1_put_both_the_alphabet_soup_and_the_cream_cheese_box_in_the_basket"
+    },
+    {
+      "key": "long_08",
+      "suite": "libero_10_swap",
+      "task_id": 8,
+      "task_name": "KITCHEN_SCENE8_put_both_moka_pots_on_the_stove"
+    },
+    {
+      "key": "long_09",
+      "suite": "libero_10_swap",
+      "task_id": 9,
+      "task_name": "KITCHEN_SCENE6_put_the_yellow_and_white_mug_in_the_microwave_and_close_it"
+    }
+  ]
+}
