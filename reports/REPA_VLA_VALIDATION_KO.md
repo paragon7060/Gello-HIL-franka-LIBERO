@@ -84,3 +84,7 @@ PNG도 직접 검토했다. 기존 하단 잘림, 긴 문장 clipping, alignment
 후속 단계다. 재개한 heartbeat나 새 반복 자동화는 없다.
 
 최신 사용법은 `docs/position40-pool10.ko.md`를 따른다.
+
+이후 추가한 영어 Qt6 GUI와 수동 확인·재시도의94-test 결과는
+[GUI 검증 보고](REPA_VLA_GUI_VALIDATION_KO.md)를 따른다.
+위83-test 및 레거시 CLI 설명은 당시 검증 기록으로 보존한다.

@@ -22,8 +22,15 @@ native 7D OSC support collection and observation recording. Original motor limit
 
 ## Start here
 
+**GELLO Studio:** [English desktop collector guide](docs/collector-studio.md).
+The Qt6 app provides all 40 tasks, initial-scene preview, motor-assist/start/pause
+buttons, video playback, attempt history, **Retry shot**, and **Confirm & next**.
+Every raw attempt is preserved; only explicitly confirmed successes enter the dataset.
+Install `.[gui,export]` and launch `python -m gello_hil.cli position-pool-gui --apply`
+after preparing the pinned Pro source/assets and assembly calibration.
+
 **REPA-VLA / 한국어:** [Position 전체 40과제 × 10-demo 수집과 1·3·5·10-shot 선택](docs/position40-pool10.ko.md).
-The guide covers shared input/calibration, interactive A6 collection, resume,
+The guide covers shared input/calibration, interactive A6 collection, review,
 immutable raw datasets, and reproducible nested subsets. No physical A6 success
 or completed 400-demo collection is claimed.
 

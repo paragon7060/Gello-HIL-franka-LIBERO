@@ -81,12 +81,16 @@ def inspect_pool(root):
     root = Path(root)
     plan_path = root / "pool-plan.json"
     plan = load_plan(plan_path)
+    from .review import current_confirmation, review_required
+    manual = review_required(root)
     cases = []
+    failed_count = 0
     for task in plan["tasks"]:
         for shot in range(1, 11):
             case = resolve_case(plan_path, task["key"], None, shot)
             folder = root / "attempts" / task["key"] / f"shot{shot:02d}"
-            attempts, accepted, unresolved = [], [], []
+            attempts, accepted, unresolved, details = [], [], [], []
+            confirmation = current_confirmation(root, task["key"], shot) if manual else None
             for directory in sorted(folder.iterdir()) if folder.exists() else []:
                 if not directory.is_dir():
                     continue
@@ -114,12 +118,26 @@ def inspect_pool(root):
                         f"passive attempt cannot enter motor-assisted pool: {header}"
                     )
                 attempts.append(str(directory.relative_to(root)))
-                if (
+                successful = (
                     meta.get("success") is True
                     and not meta.get("error")
                     and not meta.get("aborted")
-                ):
-                    accepted.append(str(directory.relative_to(root)))
+                )
+                relative = str(directory.relative_to(root))
+                selected = successful and (not manual or (
+                    confirmation is not None and confirmation["attempt"] == relative))
+                if selected:
+                    if manual and confirmation["sha256"].get("attempt.json") != sha256(header):
+                        raise ValueError("confirmed attempt metadata changed")
+                    accepted.append(relative)
+                failed_count += not successful
+                details.append({"path": relative, "success": bool(successful),
+                                "aborted": bool(meta.get("aborted")), "error": meta.get("error"),
+                                "confirmed": bool(selected), "instruction": meta.get("instruction", ""),
+                                "steps": meta.get("session", {}).get("active_step_count", len(meta.get("diagnostics", []))),
+                                "created_at_utc": meta.get("created_at_utc", directory.name)})
+            if manual and confirmation and confirmation["attempt"] not in attempts:
+                raise ValueError("confirmed attempt is missing")
             if len(accepted) > 1:
                 raise ValueError(
                     f"duplicate successful support slot: {case['key']} shot{shot}"
@@ -135,6 +153,8 @@ def inspect_pool(root):
                     "state_index": shot - 1,
                     "accepted": accepted[0] if accepted else None,
                     "attempts": attempts,
+                    "details": details,
+                    "pending_review": (sum(d["success"] for d in details) if not accepted else 0),
                 }
             )
     return {
@@ -142,7 +162,8 @@ def inspect_pool(root):
         "plan_sha256": sha256(plan_path),
         "target": 400,
         "accepted": sum(c["accepted"] is not None for c in cases),
-        "failed_attempts": sum(len(c["attempts"]) - bool(c["accepted"]) for c in cases),
+        "failed_attempts": failed_count,
+        "operator_confirmation_required": manual,
         "cases": cases,
     }
 
@@ -186,6 +207,7 @@ def collect_pool(args):
                 slot["task_key"],
             )
             current.mapping, current.assisted = "absolute", True
+            current.operator_review_required = status["operator_confirmation_required"]
             current.output_root = str(
                 root / "attempts" / slot["task_key"] / f"shot{slot['shot']:02d}"
             )
@@ -203,6 +225,9 @@ def collect_pool(args):
                 if (c["task_key"], c["shot"]) == (slot["task_key"], slot["shot"])
             )
             if not case["accepted"]:
+                if status["operator_confirmation_required"]:
+                    print("Saved review candidate. Open position-pool-gui and confirm or retry.")
+                    return 0
                 raise ValueError(
                     "collector returned success without an accepted attempt"
                 )
@@ -270,6 +295,11 @@ def freeze_pool(root):
                     "sha256": files,
                 }
             )
+            from .review import require_confirmation
+            decision = require_confirmation(directory, meta)
+            if decision:
+                episodes[-1]["confirmation"] = {"file": decision["event_file"],
+                                                "sha256": decision["event_sha256"]}
         result = {
             "schema_version": "gello-position-frozen-pool-v1",
             "plan_sha256": status["plan_sha256"],
@@ -322,6 +352,10 @@ def select_shots(manifest, output_dir, shots=(1, 3, 5, 10), seeds=(42,)):
         for name in PAYLOADS:
             if sha256(directory / name) != episode["sha256"].get(name):
                 raise ValueError("frozen raw artifact changed")
+        if episode.get("confirmation"):
+            confirmation = episode["confirmation"]
+            if sha256(manifest.parent / confirmation["file"]) != confirmation["sha256"]:
+                raise ValueError("frozen operator confirmation changed")
     results = []
     for seed in seeds:
         ordered = {}

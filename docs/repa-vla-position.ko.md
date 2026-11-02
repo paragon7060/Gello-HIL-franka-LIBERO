@@ -6,6 +6,8 @@ GELLO 소스를 복사하지 않고 같은 패키지와 원본 시연을 참조�
 
 최신 수집 목표는 **Position 전체40과제 ×10개 성공 시연**이다.
 [400-demo pool 실행 절차](position40-pool10.ko.md)를 먼저 따른다.
+최신 수집기는 영어 Qt6 **GELLO Studio**다. [GUI 사용법](collector-studio.md)에
+초기 장면·모터 보조·영상 검토·Retry shot·Confirm & next 흐름을 정리했다.
 아래 12-task/3-draw 설명은 이전 plan과의 호환 경로다.
 
 ## 현재 확인한 범위
@@ -41,6 +43,10 @@ src/gello_hil/
   exports.py         # 기존 native NPZ / OAT 형식 HDF5 내보내기
   actuation.py       # 기존 제한된 모터 보조 transport
   live_handoff.py    # 기존 A6 단일 bus 소유권과 force fade
+  collector_gui.py   # 단일 scene worker와 GUI 명령
+  collector_qt.py    # 영어 Qt6 수집/검토 화면
+  gui_bridge.py      # 버튼을 기존 session/A6에 연결
+  review.py          # 명시적 채택과 변경 불가 확인 이력
 ```
 
 공통 원본은 각 `runs/position-gello/<timestamp>/`에 한 번만 저장한다.

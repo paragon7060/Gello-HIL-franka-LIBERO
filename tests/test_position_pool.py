@@ -21,6 +21,8 @@ def fake_attempt(root, key, shot, *, success=True, assisted=True, name="001"):
         "motor_assistance_requested": assisted,
         "position_case": case,
         "controller": "OSC_POSE",
+        "controller_contract": {"type": "OSC_POSE", "impedance": "fixed"},
+        "instruction": "test native instruction",
         "success_hold_steps": 20,
         "native_success_streak": 20,
         "source": {

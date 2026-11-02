@@ -10,7 +10,7 @@ import numpy as np
 from .pose_control import matrix_rotvec
 
 
-def load_support(attempt):
+def load_support(attempt, *, require_review=True):
     """Validate the raw support boundary before export or pool acceptance."""
     attempt = Path(attempt)
     meta = json.loads((attempt / "attempt.json").read_text())
@@ -21,6 +21,9 @@ def load_support(attempt):
     case = meta["position_case"]
     if case["split"] != "support" or not 0 <= case["state_index"] <= 14:
         raise ValueError("development/final scenes cannot become support")
+    if require_review:
+        from .review import require_confirmation
+        require_confirmation(attempt, meta)
     with np.load(attempt / "trajectory.npz", allow_pickle=False) as t:
         actions = t["actions"].copy()
         counts = t["counts"].copy()

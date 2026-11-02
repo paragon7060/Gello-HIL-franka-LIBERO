@@ -1,0 +1,79 @@
+{
+  "date": "2026-11-02",
+  "branch": "REPA-VLA",
+  "gello_baseline_commit": "26be20212ff0709668b776ebefabe7da1809aa73",
+  "previous_integration_commit": "4bc2553b26692843198648fb90efdcafe159f080",
+  "interface_language": "English",
+  "toolkit": "Qt6",
+  "python": "3.10",
+  "tests": {
+    "tests": 94,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "desktop_review_qa": {
+    "motor_register_writes": 0,
+    "real_serial_device_used": false,
+    "native_scene": false,
+    "interface_language": "English",
+    "toolkit": "Qt6",
+    "screenshots": [
+      "review-candidate.png",
+      "confirmed-next-shot.png"
+    ],
+    "viewport": [
+      1518,
+      394
+    ],
+    "video_playback": true,
+    "confirm_button": true,
+    "automatically_selected_next_shot": true,
+    "failed_attempt_preserved": true,
+    "accepted": 1,
+    "worker_cleaned_up": true,
+    "passed": true
+  },
+  "native_initial_scene_qa": {
+    "motor_register_writes": 0,
+    "real_serial_device_used": false,
+    "native_scene": true,
+    "interface_language": "English",
+    "toolkit": "Qt6",
+    "screenshots": [
+      "initial-native-scene.png"
+    ],
+    "viewport": [
+      1518,
+      394
+    ],
+    "initial_scene_visible": true,
+    "motor_buttons_disabled": true,
+    "worker_cleaned_up": true,
+    "passed": true
+  },
+  "ruff_passed": true,
+  "diff_whitespace_passed": true,
+  "real_demonstrations_collected": 0,
+  "real_demo_target": 400,
+  "physical_A6_validated": false,
+  "actual_serial_used_in_GUI_QA": false,
+  "actual_motor_register_writes_in_GUI_QA": 0,
+  "legacy_motor_transport_modified": false,
+  "training_launched": false,
+  "old_automation_resumed": false,
+  "source_sha256": {
+    "src/gello_hil/collector_gui.py": "b46a07eba3318f242dc23aac275621579246668610b6dcb4b7d097e4d63647f0",
+    "src/gello_hil/collector_qt.py": "5c7c3314b87bb5c46854ee402a3639d8bcc4575767ea3b84da5de6a16b3585d1",
+    "src/gello_hil/gui_bridge.py": "e9a0c9ba666fe408b7e0a7a7152af80f929a6d25d9b416f6b7f39cb4c9dce4e7",
+    "src/gello_hil/review.py": "48053717aec29ab7a9dd1ee6537956c2e61c0c0c7e1de833067adae140f70f01",
+    "src/gello_hil/alignment.py": "b947cc176d696c2b658abc0f6464adaec0e83ec9c51ebf0544e2e22b71b977a0",
+    "src/gello_hil/assisted.py": "bc8377ff9d04183919521824ad266330eb15299e69f4ed78832a8924636b11a9",
+    "src/gello_hil/cli.py": "c73a47f0a7437bb5e62bdfdd52659bee8a47e74953396d4e72288167931b7e8c",
+    "src/gello_hil/pool.py": "e4435dcaa8cfbc9d31146fc361e8214486e3032a7fa1a7b57519179bda80b2c8",
+    "src/gello_hil/exports.py": "a24be444453f8cbb4a38dbe5047d00fae0b77d7d393fe5ce57cf98deb401666f",
+    "src/gello_hil/position.py": "050266b70213e0e6f5a7c23a935f064df349ba3c1304afa8ac6fa7f09e88ac17",
+    "tests/test_collector_gui.py": "ea2352cbb85af17bc7af0fcc45e720393617f4d91a670e0a1793b722b7e1ad2e",
+    "scripts/collector_gui_smoke.py": "5e18c21c27f26fd88bbceab94f7f7efaa1e15f4fe608f21d967b04e522d4c5b5"
+  }
+}

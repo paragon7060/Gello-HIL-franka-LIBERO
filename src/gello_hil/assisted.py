@@ -34,5 +34,6 @@ def make_alignment_runner(args, calibration):
             "max_abs_target_error_rad": 0.60, "rms_target_error_rad": 0.60,
         },
     }
-    return AlignmentRunner(config=config, calibration=calibration)
+    return AlignmentRunner(config=config, calibration=calibration,
+                           display=getattr(args, "gui_display", None))
 

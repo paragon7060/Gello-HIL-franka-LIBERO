@@ -198,6 +198,7 @@ def collect(args) -> int:
     if args.max_active_steps < 1 or args.resolution < 1 or args.window_scale <= 0:
         raise ValueError("positive action budget, resolution and window scale required")
     _configure_libero(args)
+    bridge = getattr(args, "gui_display", None)
     from .libero_runtime import follower_joints, make_env, rgb_frame
 
     calibration = GelloCalibration.from_json(Path(args.calibration))
@@ -292,7 +293,16 @@ def collect(args) -> int:
                 )
                 if live_handoff is not None and live_handoff.powered:
                     notice = "ACTIVE: following GELLO while reducing force over 2 seconds"
-                canvas = operator_panel(
+                if bridge is not None:
+                    bridge.set_state(mode="collection", phase=session.status, instruction=instruction,
+                        notice=notice, active_steps=session.active_step_count,
+                        max_active_steps=args.max_active_steps, motor_powered=bool(live_handoff and live_handoff.powered),
+                        diagnostic={"mapped_joints": target.tolist(), "errors": errors.tolist()})
+                    bridge.publish(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+                    key = bridge.waitKey(10) & 0xFF
+                    command = {13: "resume", 10: "resume", 32: "pause", ord("q"): "abort"}.get(key)
+                else:
+                    canvas = operator_panel(
                     frame,
                     instruction=instruction,
                     status=session.status,
@@ -304,8 +314,8 @@ def collect(args) -> int:
                     notice=notice,
                     scale=args.window_scale,
                 )
-                cv2.imshow(window, canvas)
-                command = poll_command(window)
+                    cv2.imshow(window, canvas)
+                    command = poll_command(window)
                 if command == "abort":
                     session.abort()
                     break
@@ -407,6 +417,8 @@ def collect(args) -> int:
             "native_success_streak": success_streak,
             "mapping_mode": controller.mode,
             "motor_assistance_requested": assisted,
+            "operator_review_required": bool(getattr(args, "operator_review_required", False)),
+            "operator_gui": bridge.summary() if bridge is not None else None,
             "success": success,
             "aborted": session.aborted,
             "error": error,
@@ -429,6 +441,11 @@ def collect(args) -> int:
                 "assisted_write_provenance": "alignment.live_handoff.motor_session",
             },
         }
+        if bridge is not None and not any(e.get("accepted") and e.get("command") in ("assist", "start")
+                                          for e in bridge.events):
+            # Merely browsing an initial scene is not a demonstration attempt.
+            output = bridge.root / "preview-result"
+            metadata["preview_only"] = True
         _save_attempt(
             output,
             metadata=metadata,
@@ -446,6 +463,11 @@ def collect(args) -> int:
         )
         if error:
             print(error)
+        if bridge is not None:
+            bridge.set_state(mode="review", phase="REVIEW", attempt_path=str(output.resolve()),
+                             success=success, error=error, aborted=session.aborted,
+                             active_steps=session.active_step_count)
+            bridge.publish(force=True)
     return 0 if success and error is None else 1
 
 
@@ -455,10 +477,19 @@ class _AlignmentStopped(Exception):
 
 def assisted_collect(args) -> int:
     # No bus is opened by this authorization path.
-    if not args.apply:
+    if getattr(args, "gui_scene_preview_only", False):
+        from .gui_bridge import preview_scene
+        _configure_libero(args)
+        return preview_scene(args)
+    if not args.apply and not getattr(args, "gui_preview_only", False):
         raise SystemExit("assisted-collect can move real motors; read SAFETY.md, then add --apply")
     if args.mapping != "absolute":
         raise SystemExit("assisted-collect requires --mapping absolute")
+    if getattr(args, "gui_control_dir", None):
+        from .gui_bridge import FileDisplay
+        args.gui_display = FileDisplay(args.gui_control_dir, motor_permitted=bool(args.apply))
+        args.operator_review_required = True
+        return collect(args)
     print("MOTOR-WRITE SAFETY GATE: seven arm motors; gripper remains torque-off.")
     print("Support GELLO, clear all pinch points, keep the physical power disconnect reachable.")
     print("Experimental XL330 model-1200 arms / model-1190 gripper; Goal Current <=100 mA.")
@@ -576,6 +607,10 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--shot", type=int, choices=range(1, 11), required=True)
         p.add_argument("--libero-source", required=True, help="pinned LIBERO-PRO Git checkout")
         p.add_argument("--success-hold-steps", type=int, default=20)
+        p.add_argument("--gui-control-dir", help=argparse.SUPPRESS)
+        p.add_argument("--gui-preview-only", action="store_true", help=argparse.SUPPRESS)
+        p.add_argument("--gui-scene-preview-only", action="store_true", help=argparse.SUPPRESS)
+        p.add_argument("--operator-review-required", action="store_true", help=argparse.SUPPRESS)
         p.set_defaults(func=position_collect, mapping="relative-clutch" if name == "collect-position" else "absolute",
                        assisted=(name == "assisted-position"),
                        output_root="runs/position-gello")
@@ -600,6 +635,8 @@ def build_parser() -> argparse.ArgumentParser:
     export.set_defaults(func=export_command)
     from .pool import add_pool_commands
     add_pool_commands(sub)
+    from .collector_gui import add_gui_command
+    add_gui_command(sub)
     return parser
 
 

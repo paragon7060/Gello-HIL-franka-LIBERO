@@ -193,9 +193,10 @@ def draw_alignment_panel(
     return np.hstack((camera, panel))
 
 class AlignmentRunner:
-    def __init__(self, *, config: dict, calibration: GelloCalibration):
+    def __init__(self, *, config: dict, calibration: GelloCalibration, display=None):
         self.config = config
         self.calibration = calibration
+        self.display = display if display is not None else cv2
         self.limits = GelloAlignmentAssistLimits.from_dict(config["alignment_limits"])
         self.passive_start_contract = dict(config["near_pose_passive_start"])
         self.live_release = self.limits.profile == "GELLO-ALIGN-A6"
@@ -261,8 +262,8 @@ class AlignmentRunner:
                 PROTOCOL_VERSION, task_id=task_id, state_id=state_id,
                 attempt_index=attempt_index,
             )
-        cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window, frame.shape[1] * 3 + 780, frame.shape[0] * 3)
+        self.display.namedWindow(window, cv2.WINDOW_NORMAL)
+        self.display.resizeWindow(window, frame.shape[1] * 3 + 780, frame.shape[0] * 3)
         status = "PAUSED"
         notice = "PRE-ATTEMPT READY: press ENTER only while supporting the GELLO"
         diagnostic = None
@@ -305,11 +306,14 @@ class AlignmentRunner:
                 window_scale=3.0, panel_width=780,
                 handoff_status=f"{phase}{countdown}",
             )
-            cv2.imshow(window, display)
+            if hasattr(self.display, "set_state"):
+                self.display.set_state(mode="alignment", phase=phase,
+                                       notice="Handing off motor assistance", passive_start_ready=False)
+            self.display.imshow(window, display)
 
         def poll_handoff_key():
-            key = int(cv2.waitKey(10)) & 0xFF
-            if cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
+            key = int(self.display.waitKey(10)) & 0xFF
+            if self.display.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
                 raise HandoffCancelled(abort=True)
             return key
 
@@ -477,10 +481,15 @@ class AlignmentRunner:
                         diagnostic, self.passive_start_contract
                     ),
                 )
-                cv2.imshow(window, display)
-                key = int(cv2.waitKey(10)) & 0xFF
+                if hasattr(self.display, "set_state"):
+                    self.display.set_state(mode="alignment", phase=status, notice=notice,
+                        instruction=task_instruction, diagnostic=diagnostic,
+                        preview_error=paused_preview_error,
+                        passive_start_ready=near_pose_passive_start_ready(diagnostic, self.passive_start_contract))
+                self.display.imshow(window, display)
+                key = int(self.display.waitKey(10)) & 0xFF
                 try:
-                    closed = cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1
+                    closed = self.display.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1
                 except cv2.error:
                     closed = True
                 if closed or key in (ord("q"), ord("Q"), 27):
@@ -517,6 +526,21 @@ class AlignmentRunner:
                                 self.limits.ready_max_abs_error_rad
                             ),
                         )
+                        if (getattr(self.display, "last_button", None) == "assist"
+                                and near_pose_passive_start_ready(diagnostic, self.passive_start_contract)):
+                            # Assist is not the Start button. A near-pose check stays paused.
+                            active_controller.verify_near_pose_passive_start()
+                            summary = active_controller.summary()
+                            if int(summary.get("motor_register_writes", -1)) != 0:
+                                raise GelloActuationSafetyError("unexpected write during passive alignment check")
+                            sessions.append(summary)
+                            active_bus.close()
+                            active_controller = None
+                            active_bus = None
+                            pause_started = time.monotonic()
+                            status = "PAUSED"
+                            notice = "Already aligned, torque OFF: press Start to collect"
+                            continue
                         if finish_near_pose_passive_start(
                             diagnostic,
                             source_status="PAUSED",
@@ -739,7 +763,10 @@ class AlignmentRunner:
                     physical_power_cut_required = True
             if not (self.visible_handoff and collection_start_eligible and not failure):
                 try:
-                    passive.close_operator_window(window)
+                    if self.display is cv2:
+                        passive.close_operator_window(window)
+                    else:
+                        self.display.destroyWindow(window)
                 except cv2.error:
                     pass
             if status == "PAUSED" and pause_started is not None:

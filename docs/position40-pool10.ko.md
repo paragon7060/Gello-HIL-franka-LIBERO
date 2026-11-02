@@ -2,7 +2,9 @@
 
 목표는 **LIBERO-Pro Position 40과제마다 성공 시연 10개, 총 400개**를 GELLO 모터 보조
 방식으로 수집하는 것이다. 원본 400개를 고정한 뒤 같은 데이터에서 1·3·5·10-shot
-학습용 목록을 만든다. GELLO 입력·보정·GUI·기록 코드는 이 저장소 `REPA-VLA` 브랜치에서
+학습용 목록을 만든다. 영어 Qt6 GUI인 **GELLO Studio**에서 초기 장면, 수집, 영상 검토,
+재시도와 성공 시연 확인을 관리한다. [English GUI guide](collector-studio.md).
+GELLO 입력·보정·GUI·기록 코드는 이 저장소 `REPA-VLA` 브랜치에서
 공통으로 관리하고, 기존 실험과 새 실험이 같은 원본 및 선택 manifest를 참조한다.
 
 **현재는 수집 코드와 공식 자산을 준비한 단계다. 실제 성공 시연은 0/400이며 실물 A6
@@ -33,7 +35,10 @@ Gello-HIL-franka-LIBERO/                 # 공통 코드, REPA-VLA 브랜치
     calibration-SESSION/                # 실제 조립의 보정 결과
     position40-pool10/
       pool-plan.json                    # 수집 시작 전에 고정한 plan
-      .collection.lock                  # 동일 pool의 중복 수집 방지
+      .collection.lock                  # 동일 pool의 중복 수집/확인 방지
+      review-policy.json                # GUI의 명시적 확인 필수
+      reviews/<task>/shotNN/             # hash chain으로 연결한 확인/재시도 이력
+      gui-sessions/<id>/                # 단일 worker, 초기 장면과 제어 진단
       attempts/
         object_07/shot01/<UTC timestamp>/
           attempt.json                  # instruction, outcome, source, 모든 이벤트
@@ -72,10 +77,11 @@ export SESSION="runs/calibration-$(date +%Y%m%dT%H%M%S)"
 export POOL="$PWD/runs/position40-pool10"
 ```
 
-Python>=3.10, NumPy<2, OpenCV GUI와 LIBERO/robosuite 1.4.x가 필요하다.
+Python>=3.10, NumPy<2, Qt6(`PySide6-Essentials`)와 LIBERO/robosuite 1.4.x가 필요하다.
+기존 OpenCV GUI도 호환 경로로 유지한다.
 현재 확인한 `HIL` 환경은 Python3.9여서 이 패키지를 실행할 때 `openvla-oft`를 사용했다.
 Numba cache도 이 checkout의 `runs/`에 두므로 conda 설치 경로를 수정하지 않는다.
-새 환경에서 패키지 설치가 필요하면 `python -m pip install -e '.[export]'`를 사용한다.
+새 환경에서 패키지 설치가 필요하면 `python -m pip install -e '.[gui,export]'`를 사용한다.
 기존 LIBERO나 사용자 전역 config를 자동 교체하지 않는다.
 
 ```bash
@@ -155,62 +161,74 @@ PYTHONPATH="$PWD/src:$LIBERO_PRO_ROOT" python -m gello_hil.cli mapping-check \
 각 관절을 하나씩 움직여 화면과 방향·범위를 확인하고 q로 종료한다.
 이 preview는 실제 모터를 구동하거나 physics step을 진행하지 않는다.
 
-## 5. 모터 보조로 수집
+## 5. GELLO Studio로 수집·검토·재시도
 
-[SAFETY.md](../SAFETY.md)와 [기존 A6 절차](assisted.md)를 따른다.
-arm current100mA, P750, guide20counts, tracking40counts, 5Hz/watchdog 제한과
-gripper torque-off를 그대로 사용한다. `--apply` 뒤에도 매 시도 터미널 Enter와
-GUI의 READY/Enter가 필요하다. **GELLO를 지지하고 전원 차단에 접근할 수 있는 사람이 조작한다.**
-
-먼저 한 시도만 진행해 실제 장면·보정·A6 handoff를 확인한다.
+이후에는 **GUI 명령 하나**로 관리한다. task 이름이나 재시도 flag를 매번 입력하지 않는다.
+40과제 목록과 shot1–10 슬롯을 클릭하고, 이전 실행의 첫 미확인 슬롯부터 이어서 수집한다.
 
 ```bash
-python -m gello_hil.cli init-position-pool --dataset-root "$POOL"
-python -m gello_hil.cli collect-position-pool \
+python -m gello_hil.cli position-pool-gui \
   --port "$GELLO_PORT" --baudrate 57600 \
-  --calibration "$SESSION/calibration.json" \
-  --libero-source "$LIBERO_PRO_ROOT" --libero-config-path "$LIBERO_CONFIG_PATH" \
-  --dataset-root "$POOL" --task-key object_07 --max-attempts 1 --apply
-```
-
-| 단계/키 | 수행 내용 |
-| --- | --- |
-| 터미널 Enter | 해당 시도에 대한 제한된 모터 보조 허용. 다른 문자열을 입력하면 취소 |
-| alignment 창 Enter | 기존 A6 preflight/정렬 절차 시작 |
-| READY에서 Enter | 같은 장면에서 제어 시작, 처음 action은 neutral, 기존 force를 2초간 줄임 |
-| ACTIVE에서 Space | force 해제와 clutch/pause, physics와 active budget 정지 |
-| PAUSED에서 Enter | 현재 GELLO/로봇 자세를 다시 anchor하고 재개; 보조 force를 다시 켜지 않음 |
-| q / ESC / 창 닫기 | 해제·중단·원본 보존, 전체 수집 큐 종료 |
-
-이미 충분히 가까운 자세이면 force를 켜지 않는 기존 passive start 경로를 사용한다.
-따라서 `motor_assistance_requested=true`는 같은 A6 프로토콜을 사용했다는 뜻이며,
-모든 시연에서 실제 전류를 인가했다는 뜻은 아니다. 실제 write/fade telemetry는 별도 보존한다.
-
-실물 확인 후 전체 수집은 다음 명령이다. 한 세션에서 성공 10개까지만 하려면
-`--max-attempts 10`을 추가한다. 특정 과제만 하려면 `--task-key object_07` 등을 추가한다.
-
-```bash
-python -m gello_hil.cli collect-position-pool \
-  --port "$GELLO_PORT" --baudrate 57600 \
-  --calibration "$SESSION/calibration.json" \
   --libero-source "$LIBERO_PRO_ROOT" --libero-config-path "$LIBERO_CONFIG_PATH" \
   --dataset-root "$POOL" --apply
 ```
 
-성공 슬롯은 다음 실행에서 건너뛴다. 성공 판정은 최소20 active-step 연속 native success다.
-장면/목표/XY/instruction을 수정하지 않고 실제7D OSC_POSE action을 기록한다.
-순간 success 뒤 최종 false가 되면 성공 시연에 넣지 않는다.
+모든 화면 문구는 영어이며 Qt6 폰트 렌더링을 사용한다. 기존 Tk/저해상도 문구 대신
+과제·shot 목록, 넓은 장면/영상 뷰어, 상태별 버튼과 시도 이력을 한 화면에 배치했다.
+처음에는 실제 native 초기 장면이 보인다. 보정 파일을 아직 선택하지 않은 초기 장면은
+serial 통신 없이 표시한다. **Calibration...**에서 현재 조립의 보정 JSON을 고른다.
+`--calibration "$SESSION/calibration.json"`을 실행 시 지정해도 된다.
+encoder/alignment worker가 열린 뒤에는 장치/보정 설정을 잠그므로 **Stop & review** 후 변경한다.
 
-실패·중단·오류가 발생하면 그 시도를 저장하고 큐를 멈춘다. 다음 실행도 같은 실패 슬롯에서
-멈춘다. 원인을 확인한 뒤 같은 명령에 `--retry-failed`를 추가하면 해당 슬롯에 새 시도
-한 번을 허용한다. 새 실패가 나면 즉시 다시 멈춘다. 이전 실패/영상/이벤트는 지우지 않는다.
-성공한 동일 슬롯이 두 개 있거나 불완전한 시도 폴더가 있으면 임의로 선택하지 않고 거부한다.
+`--apply`를 생략하면 motor/collection 버튼을 비활성화한다. 영상 검토와 기존 후보 확인은
+가능하다. `--apply`를 줘도 창을 열거나 다음 shot으로 이동하는 것만으로 모터를 켜지 않는다.
 
-진행률은 하드웨어를 열지 않고 확인한다. 주기적 watcher/자동화는 만들지 않는다.
+| 영어 버튼 | 수행 내용 |
+| --- | --- |
+| **Open scene** | 선택 task/shot의 등록된 초기 장면을 연다 |
+| **Motor assist** | 명시적으로 기존 제한된 A6 정렬을 요청한다 |
+| **Start collection** | 정렬된 상태에서 수집 시작, 또는 pause에서 현재 자세로 re-anchor/재개 |
+| **Pause** | force 해제와 clutch/pause, physics·active budget 정지 |
+| **Stop & review** | 해제·종료·원본 보존 후 같은 창에서 검토 |
+| **Play**와 seek bar | 선택 시도의 영상 재생과 프레임 탐색 |
+| **Retry shot** | 이전 시도를 보존하고 동일 task/init에 새 시도를 준비 |
+| **Confirm & next** | 성공 시도의 원본 검증·채택 후 다음 미확인 shot 선택 |
+| **Next pending** | 다음 미확인 슬롯으로 이동 |
+
+**장면 확인 → Motor assist → Start collection → 영상 검토 → Retry shot 또는 Confirm & next**
+순서다. 모터 보조가 필요 없을 정도로 가까운 자세이면 기존 passive-start를 사용하며
+motor write0이다. 이때도 **Motor assist** 클릭만으로 수집을 시작하지 않는다.
+다음 shot은 초기 장면만 자동으로 열고 보조·수집 시작은 다시 버튼을 기다린다.
+ACTIVE 중 과제 이동은 차단하고 pause/stop을 먼저 사용한다.
+창 닫기는 worker의 정상 force 해제·기록 완료를 기다리며 강제 kill하지 않는다.
+
+[SAFETY.md](../SAFETY.md)와 [기존 A6 절차](assisted.md)를 따른다.
+arm current100mA, P750, guide20counts, tracking40counts, 5Hz/watchdog 제한과
+gripper torque-off는 그대로다. **GELLO를 지지하고 전원 차단에 접근할 수 있는 사람이 조작한다.**
+원래 A6 motor register 구현은 변경하지 않았으며, 실물 A6 성공은 아직 검증하지 않았다.
+`motor_assistance_requested=true`가 모든 시연의 실제 전류 인가를 뜻하지는 않는다.
+실제 write/fade telemetry를 함께 보존한다.
+
+원본은 실패·중단도 매번 자동 저장한다. **Confirm은 성공 원본을 학습용으로 채택하는 별도 결정**이다.
+최소20 active-step 연속 native success와 최종 true, 관측/action 정렬, calibration/provenance를
+통과해야 확인할 수 있다. 실패나 중단을 확인하여 성공으로 바꿀 수 없다.
+미확인 성공은 진행률과 export에 포함하지 않는다. 장면/목표/XY/instruction도 수정하지 않는다.
+
+실패 후 앱을 다시 실행하지 않고 **Retry shot**을 누른다. 이전 NPZ/영상/실패/이벤트는 남는다.
+이미 확인한 slot을 재시도해도 새 후보를 확인하기 전까지 기존 채택은 유지한다.
+새 성공을 확인하면 선택만 교체하고 이전 원본·확인 이력을 지우지 않는다.
+`reviews/`의 append-only hash chain과 원본 SHA로 이를 기록한다.
+초기 장면만 둘러본 경우는 `gui-sessions/`에 두고 실제 시도 수에 넣지 않는다.
+
+진행률은 GUI나 아래 명령으로 확인한다. 주기적 watcher/자동화는 만들지 않는다.
 
 ```bash
 python -m gello_hil.cli position-pool-status --dataset-root "$POOL"
 ```
+
+기존 `collect-position-pool` CLI도 보존한다. GUI에서 연 pool은 수동 확인 정책을 적용하므로
+CLI로 만든 성공도 후보로 저장한 뒤 GUI 확인을 기다린다. 레거시 CLI의 실패 gate는
+`--retry-failed`이지만 GUI에서는 **Retry shot**이 그 명시적 사용자 동작이다.
 
 ## 6. 400개 완료 후 고정과 k-shot 선택
 
@@ -222,9 +240,9 @@ python -m gello_hil.cli select-shots \
   --output-dir runs/position40-subsets
 ```
 
-400개가 모두 성공해야 freeze가 가능하다. 각 원본의 실제 action/관측 정렬, calibration
+GUI pool은400개가 모두 성공하고 명시적으로 확인되어야 freeze가 가능하다. 각 원본의 실제 action/관측 정렬, calibration
 snapshot, source commit과 파일 SHA, video 존재를 확인하고 SHA256을 고정한다.
-freeze 후 같은 pool에 시연을 추가하지 않는다. 선택 전에 원본 checksum을 다시 확인한다.
+freeze 후에는 GUI 영상 검토만 가능하며 같은 pool에 시연/확인을 추가하지 않는다. 선택 전에 원본 checksum을 다시 확인한다.
 
 같은 seed에서는 과제별 SHA256 순서의 앞 k개를 선택한다. 따라서
 **1-shot ⊂ 3-shot ⊂ 5-shot ⊂ 10-shot**이다. k는1–10 중 원하는 값을 사용할 수 있다.
@@ -248,7 +266,7 @@ seed는 demo 선택 seed이며 학습 seed와 별도로 기록한다. 각 모델
 
 원본은 하나만 유지한다. 각 selection의 `pool_manifest` 기준 상대 `attempt` 경로와
 `episode_id`를 통해 같은 시연을 참조한다. 기존 native 경로는 `native-npz`, OAT용
-변환은 `oat-hdf5`를 사용한다. 성공 한 시도의 변환 예시는 다음과 같다.
+변환은 `oat-hdf5`를 사용한다. 확인까지 완료한 성공 한 시도의 변환 예시는 다음과 같다.
 
 ```bash
 python -m gello_hil.cli export-support \
@@ -282,8 +300,24 @@ few-shot loader/adapter를 사용해야 한다. 기존 full-data loader의 계�
 `HIL` Python3.9 실행 오류는 Python>=3.10 환경으로 바꿔 해결한다.
 `different LIBERO package already imported`는 새 Python 프로세스에서 pinned source로 실행한다.
 `pool incomplete`는 실패를 숨기지 않고 미완료 슬롯을 채운 뒤 다시 freeze한다.
-`duplicate successful support slot`이나 불완전 폴더는 원본을 보존하며 원인을 확인한다.
+레거시 pool의 `duplicate successful support slot`이나 불완전 폴더는 원본을 보존하며 원인을 확인한다.
+GUI pool은 여러 성공 후보를 보존하고 마지막으로 명시적으로 확인한 후보만 채택한다.
 source commit/plan이 다른 데이터는 새 pool 디렉터리에 모은다.
 
 입력·OSC/저장 형식의 상세 설명은 [공통 연결 문서](repa-vla-position.ko.md),
 확인 기록은 [검증 보고](../reports/REPA_VLA_VALIDATION_KO.md)를 참고한다.
+
+Qt6 GUI의 실제 Spatial init0 장면과 영상→확인→다음 shot 흐름도 데스크톱에서 검증했다.
+새 GUI의 문구·버튼·상태는 영어다. 상세 검증과 screenshot 위치는
+[GUI 검증 보고](../reports/REPA_VLA_GUI_VALIDATION_KO.md)를 참고한다.
+
+현재 데스크톱에서 CPU Mesa 장면 렌더링이 필요하면 실행 전에 다음을 지정한다.
+robosuite1.4의 backend 선택 때문에 `glfw`가 EGL로 바뀌는 조합 대신 아래 GLX 조합을 확인했다.
+설치된 simulator 코드는 수정하지 않는다.
+
+```bash
+export MUJOCO_GL=glx
+export PYOPENGL_PLATFORM=glx
+export LIBGL_ALWAYS_SOFTWARE=1
+export __GLX_VENDOR_LIBRARY_NAME=mesa
+```
