@@ -218,8 +218,32 @@ few-shot loader integration. These commands do not launch training.
 ## Display troubleshooting
 
 The application uses English labels and Qt6 text rendering. `gui` installs
-`PySide6-Essentials`; QtWebEngine and a browser server are unnecessary. The app selects
+the validated **PySide6-Essentials 6.8.3** with matching Shiboken; QtWebEngine and a browser server are unnecessary. The app selects
 the Qt6 plugin directory to avoid OpenCV's bundled Qt5 plugin conflict.
+
+### `Fatal Python error: none_dealloc: deallocating None`
+
+PySide6 6.12.0 was observed to decrement `None` once per void Qt call on the
+collector's Python 3.10 runtime. Repeated UI updates exhausted its reference count
+and aborted the GUI; Stop could coincide with this cumulative failure. This is a
+Qt Python binding failure, rather than a recoverable collection exception.
+
+The GUI dependency is now pinned to 6.8.3. At startup, the app rejects the known
+unsafe version on Python 3.10/3.11, rejects mixed PySide/Shiboken versions, and
+checks that actual Qt calls do not consume `None` references. These checks run
+before any scene worker or serial connection is opened.
+
+On the configured workstation, the existing launcher was switched to a separate
+6.8.3 runtime directory. Restart with the same launch command. For another checkout,
+install the matched runtime through the GUI extra:
+
+```bash
+python -m pip install -e '.[gui,export]'
+```
+
+The fix was checked with 100,000 `setEnabled` calls and 100,000 `setText` calls,
+plus 20 real GUI Stop/review transitions using finite synthetic workers and 4,000
+UI polls. [Crash repair evidence](../reports/QT_NONE_DEALLOC_REPAIR_20261103_KO.md).
 
 Render on the GPU. On the RTX 4090 desktop a simulator step took about 10 ms with
 `MUJOCO_GL=glx` (NVIDIA) or `egl`, versus about 92 ms with CPU Mesa

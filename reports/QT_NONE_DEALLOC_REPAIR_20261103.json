@@ -1,0 +1,99 @@
+{
+  "date": "2026-11-03",
+  "base_commit": "2d832c63ba876ea221e3eea232e7a954e793a373",
+  "before": {
+    "python": "3.10.14",
+    "pyside": "6.12.0",
+    "shiboken": "6.12.0",
+    "operations": [
+      {
+        "operation": "setEnabled",
+        "calls": 200,
+        "None_refcount_before": 10482,
+        "after": 10282,
+        "delta": -200
+      },
+      {
+        "operation": "setText",
+        "calls": 200,
+        "None_refcount_before": 10281,
+        "after": 10081,
+        "delta": -200
+      }
+    ],
+    "unsafe": true,
+    "serial_opened": false,
+    "motor_register_writes": 0
+  },
+  "after": {
+    "python": "3.10.14",
+    "pyside": "6.8.3",
+    "shiboken": "6.8.3",
+    "operations": [
+      {
+        "operation": "setEnabled",
+        "calls": 100000,
+        "None_refcount_before": 10957,
+        "after": 10957,
+        "delta": 0
+      },
+      {
+        "operation": "setText",
+        "calls": 100000,
+        "None_refcount_before": 10957,
+        "after": 10957,
+        "delta": 0
+      }
+    ],
+    "unsafe": false,
+    "serial_opened": false,
+    "motor_register_writes": 0
+  },
+  "unsafe_startup_guard": {
+    "returncode": 1,
+    "known_unsafe_version_rejected": true,
+    "message": "Unsafe Qt runtime: PySide6 6.12.0 loses None references on Python 3.10/3.11 and eventually aborts with none_dealloc. Install the GUI extra: python -m pip install -e '.[gui]' (PySide6-Essentials 6.8.3).",
+    "pool_created": false
+  },
+  "stop_stress": {
+    "runtime": {
+      "python": "3.10.14",
+      "pyside": "6.8.3",
+      "shiboken": "6.8.3",
+      "void_call_samples": 64,
+      "none_refcount_delta": 0
+    },
+    "real_serial_used": false,
+    "motor_register_writes": 0,
+    "passed": true,
+    "stop_cycles": 20,
+    "explicit_gui_polls": 4000,
+    "raw_attempts_preserved": 20,
+    "video_review_opened": 20,
+    "none_refcount_before": 11189,
+    "none_refcount_after": 11261,
+    "worker_cleaned_up": true
+  },
+  "pytest": {
+    "tests": 117,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "last_user_stop_raw_preserved": true,
+  "last_user_stop_actions": 367,
+  "last_user_stop_observations": 368,
+  "last_user_stop_success": false,
+  "last_user_stop_aborted": true,
+  "actual_serial_opened_by_repair_tests": false,
+  "actual_motor_register_writes_by_repair_tests": 0,
+  "source_sha256": {
+    "src/gello_hil/qt_runtime.py": "cf387faa35a53e026bcf6dabebf65d9e813ef40df09717838296324311ee0c77",
+    "src/gello_hil/collector_qt.py": "2c2f4aa4671fb3ebbfaeac1644cfc0d4c79f2e9a0eab3208891584cef683f422",
+    "tests/test_qt_runtime.py": "4b00cea85749c71dd2e2fc7f81c360c1e7fcdff2f70aef6bbe37261bb4e3bf08",
+    "tests/test_collection_robustness.py": "c2b93368ef1979579313a7b6e7c6f70e78b44fe66f8fc2a52cc6f3b484b465e8",
+    "scripts/collector_gui_stop_stress.py": "153bade039f846a0d6bb67fcdadbd69e98e3a634eadffe3becf13f27d2ab89b9",
+    "pyproject.toml": "36f78c41f50df7420f47b0d0a8324a29d1bd751ef0168839bec593f51defa004",
+    ".github/workflows/test.yml": "c08e10bfd6c612f54ed0450a6d728682019cf37ed3f33c64a64f9aa8e142390e"
+  }
+}

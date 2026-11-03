@@ -63,6 +63,9 @@ def test_encoder_dropout_pauses_the_attempt_and_resumes_after_reanchor(tmp_path,
 def test_worker_aborts_when_the_gui_process_disappears(tmp_path, monkeypatch):
     import gello_hil.gui_bridge as bridge
 
+    # Make ownership deterministic even when the test runner's PID namespace
+    # reports its initial parent as PID 1.
+    monkeypatch.setattr(bridge.os, "getppid", lambda: 4321)
     display = FileDisplay(tmp_path, motor_permitted=True)
     display.set_state(mode="alignment", phase="ALIGNMENT READY")
     assert display.waitKey(0) == -1

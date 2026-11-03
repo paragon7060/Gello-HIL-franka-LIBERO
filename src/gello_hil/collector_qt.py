@@ -1033,6 +1033,9 @@ class CollectorWindow(W.QMainWindow):
 
 
 def application():
+    from .qt_runtime import verify_qt_runtime
+
+    verify_qt_runtime()
     # OpenCV's Qt5 plugin path is incompatible with this independent Qt6 app.
     os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = C.QLibraryInfo.path(
         C.QLibraryInfo.LibraryPath.PluginsPath
@@ -1044,7 +1047,12 @@ def application():
 
 
 def launch(args):
-    app = application()
+    from .qt_runtime import QtRuntimeError
+
+    try:
+        app = application()
+    except QtRuntimeError as error:
+        raise SystemExit(str(error)) from None
     window = CollectorWindow(args)
     window.show()
     return app.exec()
