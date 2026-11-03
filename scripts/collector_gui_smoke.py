@@ -81,6 +81,7 @@ def main():
     parser.add_argument("--native-scene", action="store_true")
     parser.add_argument("--libero-source")
     parser.add_argument("--libero-config-path")
+    parser.add_argument("--task-examples", type=Path)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     dataset = args.output / "synthetic-pool"
@@ -94,6 +95,8 @@ def main():
         command += ["--libero-source", args.libero_source]
     if args.libero_config_path:
         command += ["--libero-config-path", args.libero_config_path]
+    if args.task_examples:
+        command += ["--task-examples", str(args.task_examples)]
     options = cli.build_parser().parse_args(command)
     app = application()
     window = CollectorWindow(options)
@@ -121,9 +124,28 @@ def main():
         try:
             if args.native_scene:
                 if window.state.get("phase") == "PREVIEW":
+                    if args.task_examples and stage == 0:
+                        window.example.restart()
+                        assert window.example.timer.isActive()
+                        stage = 1
+                        C.QTimer.singleShot(800, check)
+                        return
                     screenshot("initial-native-scene.png")
                     result["initial_scene_visible"] = True
                     result["motor_buttons_disabled"] = not window.buttons["assist"].isEnabled()
+                    if args.task_examples:
+                        assert window.example.frame_index > 0
+                        bottom = window.example.speed.mapTo(
+                            window.auxiliary, window.example.speed.rect().bottomRight()
+                        ).y()
+                        assert bottom < window.auxiliary.height(), "Example controls clipped by tab"
+                        assert window.example.image.geometry().bottom() < window.example.seek.geometry().top()
+                        result["example_controls_visible_without_overlap"] = True
+                        result["example_playback_beside_native_scene"] = True
+                        window.example.enlarge()
+                        app.processEvents()
+                        assert window.example.dialog.grab().save(str(args.output / "enlarged-example.png"))
+                        result["enlarged_example_visible"] = True
                     window.close()
                     return
                 if time.monotonic() - started > 45:
@@ -135,10 +157,16 @@ def main():
                 assert window.buttons["confirm"].isEnabled()
                 screenshot("review-candidate.png")
                 window.toggle_video()
+                if args.task_examples:
+                    window.example.restart()
+                    assert window.example.timer.isActive()
                 stage = 1
             elif stage == 1:
                 assert window.seek.value() > 0
                 window.toggle_video()
+                if args.task_examples:
+                    assert window.example.frame_index > 0
+                    result["example_and_attempt_playback_independent"] = True
                 window.buttons["confirm"].click()
                 stage = 2
             elif stage == 2 and pool.inspect_pool(dataset)["accepted"] == 1 and window.shot == 2:

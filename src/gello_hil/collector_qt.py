@@ -57,6 +57,10 @@ QSlider::groove:horizontal { height:4px; background:#29394e; border-radius:2px; 
 QSlider::sub-page:horizontal { background:#42dcba; border-radius:2px; }
 QSlider::handle:horizontal { background:#99f4db; width:10px; height:10px; margin:-3px 0; border-radius:5px; }
 QToolTip { background:#22334a; color:#e8eff8; border:1px solid #415775; padding:6px; }
+QTabWidget::pane { border:1px solid #223147; border-radius:8px; background:#101a29; }
+QTabBar::tab { background:#152132; color:#8da2bc; padding:8px 13px; border:0; }
+QTabBar::tab:selected { background:#23463f; color:#9af3da; }
+QTabBar::tab:disabled { color:#52667f; }
 """
 
 
@@ -349,6 +353,14 @@ class CollectorWindow(W.QMainWindow):
         views = W.QHBoxLayout()
         self.preview = ImageView()
         views.addWidget(self.preview, 1)
+        from .task_example_qt import TaskExamplePanel
+        from .task_examples import DEFAULT_EXAMPLES
+
+        self.auxiliary = W.QTabWidget()
+        self.auxiliary.setFixedWidth(300)
+        self.auxiliary.setMinimumHeight(305)
+        self.example = TaskExamplePanel(getattr(self.args, "task_examples", DEFAULT_EXAMPLES))
+        self.auxiliary.addTab(self.example, "Task example")
         self.wrist_panel = W.QWidget()
         wrist_layout = W.QVBoxLayout(self.wrist_panel)
         wrist_layout.setContentsMargins(0, 0, 0, 0)
@@ -357,9 +369,12 @@ class CollectorWindow(W.QMainWindow):
         self.wrist.setMinimumSize(220, 220)
         self.wrist.setText("")
         wrist_layout.addWidget(self.wrist, 1)
-        self.wrist_panel.setFixedWidth(280)
-        self.wrist_panel.hide()
-        views.addWidget(self.wrist_panel)
+        self.auxiliary.addTab(self.wrist_panel, "Wrist camera")
+        self.set_wrist_available(False)
+        self.auxiliary.currentChanged.connect(
+            lambda index: self.example.pause() if index != 0 else None
+        )
+        views.addWidget(self.auxiliary)
         display.addLayout(views, 1)
         self.wrist_stamp = None
         playback = W.QHBoxLayout()
@@ -431,6 +446,8 @@ class CollectorWindow(W.QMainWindow):
         )
         footer.addWidget(self.status, 1)
         self.source_badge = label("", "muted")
+        self.source_badge.setWordWrap(True)
+        self.source_badge.setFixedWidth(280)
         footer.addWidget(self.source_badge)
         outer.addLayout(footer)
 
@@ -570,6 +587,12 @@ class CollectorWindow(W.QMainWindow):
         self.progress.setText(f"{self.data['accepted']:03d} / 400 confirmed")
         self.progress_bar.setValue(self.data["accepted"])
         self.refreshing = False
+        self.example.set_task(next(t for t in self.plan["tasks"] if t["key"] == self.key))
+
+    def set_wrist_available(self, available):
+        if not available:
+            self.auxiliary.setCurrentIndex(0)
+        self.auxiliary.setTabEnabled(1, available)
 
     def search_tasks(self, text):
         for index in range(self.tasks.topLevelItemCount()):
@@ -729,7 +752,7 @@ class CollectorWindow(W.QMainWindow):
             self.selected_attempt = None
             self.frame_stamp = None
             self.wrist_stamp = None
-            self.wrist_panel.hide()
+            self.set_wrist_available(False)
             self.status.setText(
                 "Move one joint at a time. Read-only preview: no physics steps or motor writes."
             )
@@ -760,7 +783,7 @@ class CollectorWindow(W.QMainWindow):
             self.selected_attempt = None
             self.frame_stamp = None
             self.wrist_stamp = None
-            self.wrist_panel.hide()
+            self.set_wrist_available(False)
             self.phase.setText("Loading initial scene")
             self.view_badge.setText("INITIAL SCENE")
             self.status.setText(
@@ -801,7 +824,7 @@ class CollectorWindow(W.QMainWindow):
     def show_attempt(self, detail):
         self.close_video()
         self.selected_attempt = detail["path"]
-        self.wrist_panel.hide()
+        self.set_wrist_available(False)
         directory = self.root / detail["path"]
         header = directory / "attempt.json"
         meta = json.loads(header.read_text()) if header.is_file() else {"error": detail["error"]}
@@ -932,7 +955,7 @@ class CollectorWindow(W.QMainWindow):
                     if wrist.exists() and wrist.stat().st_mtime_ns != self.wrist_stamp:
                         self.wrist_stamp = wrist.stat().st_mtime_ns
                         self.wrist.show_image(G.QImage.fromData(wrist.read_bytes()))
-                        self.wrist_panel.show()
+                        self.set_wrist_available(True)
                 else:
                     result = self.worker.finish()
                     self.refresh()
@@ -1026,6 +1049,7 @@ class CollectorWindow(W.QMainWindow):
             event.ignore()
             return
         self.close_video()
+        self.example.shutdown()
         self.worker.finish()
         self.executor.shutdown(wait=False)
         self.timer.stop()

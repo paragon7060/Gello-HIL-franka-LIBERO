@@ -2,7 +2,7 @@
 
 An English-language desktop collector for **LIBERO-Pro Position: 40 tasks × 10 demos**.
 The Qt6 interface combines initial-scene preview, explicit motor-assist controls,
-recording, video playback, attempt history and operator confirmation in one window.
+recording, task example videos, attempt history and operator confirmation in one window.
 
 The collector code and GUI have been tested. **Physical A6 assistance is still
 unverified, and no real demonstrations were collected during GUI validation.**
@@ -81,6 +81,51 @@ confirming existing candidates remains available. Merely opening the window neve
 starts motor assistance or records a demonstration.
 
 ## Screen and controls
+
+### Watch the task before collecting
+
+The right side of the viewer has a **Task example** tab. Select any task in the
+library and its example poster changes automatically. Click **Play example**;
+**Replay**, the timeline, **Loop**, and **0.5x / 1x / 1.5x** control only the example.
+**Enlarge** opens a separate modeless player. Switching tasks also updates that
+window. The **Wrist camera** tab remains available when the live worker supplies it.
+Playback never starts/stops an attempt, sends a motor command, or changes a review
+decision. The example keeps its upright camera view when the policy-view toggle
+changes the collection display.
+
+The reference is **one original LIBERO human demonstration (`demo_0`) per task**,
+matched by exact suite and task name for all 40 Position tasks. It illustrates the
+goal; **LIBERO-Pro Position layouts can differ**. These are 128×128 source recordings,
+so enlarging helps viewing but cannot add detail. The persistent caption identifies
+them as original demonstrations. Hover over it for source revision, episode and
+file details. References are operator guidance, not collected GELLO support or query
+episodes, and never enter the 400-demo pool or k-shot export.
+
+Prepare the offline cache once, from the collector repository:
+
+```bash
+python -m pip install -e '.[gui,examples]'
+PYTHONPATH=src python scripts/prepare_task_examples.py
+```
+
+The helper reads only `demo_0` image data and metadata from the
+[official LIBERO dataset](https://huggingface.co/datasets/yifengzhu-hf/LIBERO-datasets/tree/f13aa24a3da8c43c7225569f28c562979fa0e35a),
+at the pinned revision. HTTP Range is required and each task has a finite transfer
+budget; a server that ignores Range cannot trigger a full dataset download. Existing
+local HDF5 files can be reused with `--local-datasets /path/to/LIBERO/datasets`.
+Local files must match the pinned catalog's complete SHA256; HTTPS Range reads pin
+the source revision and size without claiming a full-file hash verification.
+The helper checks exact HDF5 task identity and recorded terminal done/reward, converts
+OpenGL bottom-up images with a vertical flip, and writes MP4s plus SHA256 provenance
+to `runs/task-examples/`. It never creates simulator rollouts or opens GELLO. Completed
+assets are reused; failures stay in the manifest and are printed without silently
+selecting a different episode. Running it again explicitly prepares missing/invalid
+assets. Keep the videos and manifest out of Git.
+
+The normal GUI command automatically uses this directory; no per-task arguments are
+needed. An alternate cache can be selected with `--task-examples /path/to/cache`.
+Missing or mismatched assets disable only that example player and show a preparation
+message; collection controls continue to work. There are no startup network requests.
 
 | Area | Purpose |
 | --- | --- |

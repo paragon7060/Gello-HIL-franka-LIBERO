@@ -7,8 +7,8 @@
 GELLO 입력·보정·GUI·기록 코드는 이 저장소 `REPA-VLA` 브랜치에서
 공통으로 관리하고, 기존 실험과 새 실험이 같은 원본 및 선택 manifest를 참조한다.
 
-**현재는 수집 코드와 공식 자산을 준비한 단계다. 실제 성공 시연은 0/400이며 실물 A6
-모터 보조는 아직 검증하지 않았다.** 실제 시연은 사람이 GELLO를 조작해서 수행한다.
+실제 수집 진행률은 GUI의 **confirmed / 400**과 pool 검증 결과에서 확인한다.
+실물 A6 모터 보조의 별도 검증은 아직 필요하다. 실제 시연은 사람이 GELLO를 조작해서 수행한다.
 코드/모의 transport 테스트를 실제 모터 검증이나 400개 수집 완료로 해석하지 않는다.
 
 ## 1. 데이터와 폴더
@@ -32,6 +32,7 @@ Gello-HIL-franka-LIBERO/                 # 공통 코드, REPA-VLA 브랜치
   docs/                                 # 실행 절차
   runs/                                 # 전부 Git 제외
     position40-assets/                  # 공식 BDDL/init, 로컬 config와 다운로드 지문
+    task-examples/                      # 원본 LIBERO 과제별 참고 MP4 40개와 출처/SHA
     calibration-SESSION/                # 실제 조립의 보정 결과
     position40-pool10/
       pool-plan.json                    # 수집 시작 전에 고정한 plan
@@ -59,6 +60,13 @@ shot 1–10은 **native init 0–9**에 고정한다. init 10–49는 이 수집
 부르지 않으며, 다른 init 번호라고 XY가 반드시 다르다고 가정하지 않는다.
 이 pool은 `human_gello_motor_assisted`라는 새 조건이다. 기존 scripted-expert/N/W 결과를
 덮어쓰거나 그 support draw를 이 데이터로 바꾸지 않는다.
+
+GUI 오른쪽 **Task example → Play example**으로 현재 과제의 원본 LIBERO 시연을 본다.
+**Replay / Loop / 0.5x·1x·1.5x / Enlarge**를 제공하며 과제를 바꾸면 영상도 바뀐다.
+수집 중에도 예시와 현재 장면을 따로 볼 수 있고, 손목 카메라는 같은 영역의 별도 탭에 있다.
+원본 과제의 목표를 설명하는 영상이므로 **Position 배치와 다를 수 있다**. 참고 영상을
+새 GELLO 시연으로 계산하거나 학습용 pool에 넣지 않는다. 새 컴퓨터에서 40개 영상 캐시를
+준비하는 방법과 출처는 [Task example 안내](collector-studio.md#watch-the-task-before-collecting)에 있다.
 
 ## 2. Python과 입력 확인
 

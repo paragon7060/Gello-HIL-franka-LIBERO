@@ -213,12 +213,18 @@ def launch_gui(args):
 
 
 def add_gui_command(sub):
+    from .task_examples import DEFAULT_EXAMPLES
+
     parser = sub.add_parser(
         "position-pool-gui",
         help="one-window 40-task collection, video review and confirmation",
     )
     parser.add_argument("--dataset-root", default="runs/position40-pool10")
     parser.add_argument("--plan", default=str(DEFAULT_PLAN))
+    parser.add_argument(
+        "--task-examples", default=str(DEFAULT_EXAMPLES),
+        help="read-only task example directory (manifest.json and per-task MP4s)",
+    )
     parser.add_argument("--calibration")
     ports = glob.glob("/dev/serial/by-id/*")
     parser.add_argument("--port", default=ports[0] if len(ports) == 1 else "")

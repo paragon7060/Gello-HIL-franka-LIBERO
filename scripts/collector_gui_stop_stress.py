@@ -76,6 +76,8 @@ def run(args):
             "--apply",
         ]
     )
+    if args.task_examples:
+        options.task_examples = str(args.task_examples)
     # A stale local calibration preference must never connect this test to hardware.
     os.environ.pop("GELLO_CALIBRATION", None)
     launches = 0
@@ -118,6 +120,9 @@ def run(args):
             if time.monotonic() - started > 120:
                 raise RuntimeError("Stop stress timed out: " + window.status.text())
             if stage == "active" and window.state.get("phase") == "ACTIVE":
+                if args.task_examples and not window.example.timer.isActive():
+                    window.example.restart()
+                    assert window.example.capture is not None and window.example.timer.isActive()
                 # This deliberately exceeds the old runtime's cumulative void-call
                 # failure threshold while keeping the real UI/worker transition.
                 before = sys.getrefcount(None) if before is None else before
@@ -132,6 +137,9 @@ def run(args):
                 slot = window.slot()
                 assert len(slot["attempts"]) == completed + 1
                 assert slot["details"][-1]["aborted"]
+                if args.task_examples:
+                    assert window.example.capture.isOpened() and window.example.timer.isActive()
+                    result["task_example_survived_stop"] = True
                 completed += 1
                 if completed == args.cycles:
                     after = sys.getrefcount(None)
@@ -169,6 +177,7 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cycles", type=int, default=20)
     parser.add_argument("--polls-per-cycle", type=int, default=200)
+    parser.add_argument("--task-examples", type=Path)
     parser.add_argument("--synthetic-worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--control", help=argparse.SUPPRESS)
     parser.add_argument("--dataset", help=argparse.SUPPRESS)
